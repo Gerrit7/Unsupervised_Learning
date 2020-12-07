@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
 
     ####################        Predefine some Variables        #################################
-    dataDir = '../resized'                                                      # path to directory of medical MNIST images
+    dataDir = '/Users/gerrit/Documents/Master-Thesis/resized'                                                      # path to directory of medical MNIST images
     numEpochs = 3                                                               # number of epochs
     batchSize = 300                                                             # size of batches
     t2vRatio = 1.2                                                              # Maximum allowed ratio of validation to training loss
