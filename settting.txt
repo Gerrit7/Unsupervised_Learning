@@ -1,0 +1,12 @@
+{
+    "python.pythonPath": "/Library/Python/pytorch_env/bin/python",
+    "debug.inlineValues": true,
+    "python.linting.pylintArgs": [
+        "--generated-members=numpy.* ,torch.*"
+        ],
+        "files.autoSave": "afterDelay",
+        "terminal.integrated.inheritEnv": false,
+        "git.autofetch": true,
+        "window.zoomLevel": 0,
+        "kite.showWelcomeNotificationOnStartup": false
+}
