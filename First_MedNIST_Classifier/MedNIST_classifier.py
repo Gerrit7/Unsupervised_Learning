@@ -31,8 +31,8 @@ if __name__ == '__main__':
 
 
     ####################        Predefine some Variables        #################################
-    dataDir = '/Users/gerrit/Documents/Master-Thesis/resized'                                                      # path to directory of medical MNIST images
-    numEpochs = 3                                                               # number of epochs
+    dataDir = '../resized'                                                      # path to directory of medical MNIST images
+    numEpochs = 10                                                               # number of epochs
     batchSize = 300                                                             # size of batches
     t2vRatio = 1.2                                                              # Maximum allowed ratio of validation to training loss
     t2vEpochs = 3                                                               # Number of consecutive epochs before halting if validation loss exceeds above limit
@@ -166,7 +166,7 @@ if __name__ == '__main__':
             return num_features
 
 
-    net = Net(imageWidth,imageHeight,numClass)                                  # create neural network
+    net = Net(imageWidth,imageHeight,numClass).cuda()                           # create neural network
     criterion = nn.CrossEntropyLoss()                                           # set criterion
     optimizer = optim.SGD(net.parameters(), lr=lRate, momentum=momentum)        # set optimizer to squared gradient decent
 
