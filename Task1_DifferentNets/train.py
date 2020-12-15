@@ -3,6 +3,7 @@ import argparse
 from tqdm import trange
 import numpy as np
 import shutil
+from shutil import copyfile
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -117,6 +118,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
     print('==> Testing model...')
     restore_model_path = os.path.join(
         dir_path, 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
+
     model.load_state_dict(torch.load(restore_model_path)['net'])
     test(model,
          'train',
@@ -134,6 +136,9 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
          task,
          output_root=output_root)
     
+    save_best_model_path = os.path.join( 
+        os.path.join(output_root, flag), 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
+    copyfile(restore_model_path, save_best_model_path)
     shutil.rmtree(dir_path)
 
 
