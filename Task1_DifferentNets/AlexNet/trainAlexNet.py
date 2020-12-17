@@ -9,11 +9,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
-from alexnet_pytorch import AlexNet
 
 from medmnist.models import ResNet18, ResNet50
-from medmnist.dataset import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIST, PneumoniaMNIST, RetinaMNIST, \
-    BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
+from medmnist.dataset import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIST, PneumoniaMNIST, RetinaMNIST, BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
 from medmnist.evaluator import getAUC, getACC, save_results
 from medmnist.info import INFO
 
@@ -113,8 +111,10 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
         kwar = {}
         cpu = torch.device("cpu")
     
-    model = AlexNet.from_pretrained("alexnet").to(device)
-
+    model = torch.hub.load('pytorch/vision:v0.6.0', 'alexnet', pretrained=True)
+    model.classifier[4] = nn.Linear(4096,1024)
+    model.classifier[6] = nn.Linear(1024, n_classes)
+    
     if task == "multi-label, binary-class":
         criterion = nn.BCEWithLogitsLoss()
     else:
