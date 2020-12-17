@@ -114,6 +114,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
     model = torch.hub.load('pytorch/vision:v0.6.0', 'alexnet', pretrained=True)
     model.classifier[4] = nn.Linear(4096,1024)
     model.classifier[6] = nn.Linear(1024, n_classes)
+    model.to(device)
     
     if task == "multi-label, binary-class":
         criterion = nn.BCEWithLogitsLoss()

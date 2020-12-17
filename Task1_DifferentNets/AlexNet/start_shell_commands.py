@@ -11,8 +11,8 @@ for dset in range(len(dataSets3)):
     for slc in slices:
         os.system('python trainAlexNet.py '+
         '--data_name ' + str(dataSets3[dset]) + ' ' +
-        '--input_root ../../DataSets/medmnist-20201211T084149Z-001/medmnist/ ' +
-        '--output_root ../../TrainedNets/AlexNet ' +
+        '--input_root ../../../DataSets/medmnist/ ' +
+        '--output_root ../../../TrainedNets/AlexNet ' +
         '--num_epoch 100 ' +
         '--train_size ' + str(slc) + ' ' +
         '--download False '
