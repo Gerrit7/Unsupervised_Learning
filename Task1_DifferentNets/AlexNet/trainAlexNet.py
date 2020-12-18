@@ -43,12 +43,13 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
 
     start_epoch = 0
     lr = 0.001
-    batch_size = 128
+    batch_size = 8 #128
     val_auc_list = []
     train_dataset_scaled = []
+    epoch_old = 0
+    auc_old = 0
 
-    if trainSize != 1:
-        flag = flag + "_" + str(trainSize)
+    flag = flag + "_" + str(trainSize)
 
     dir_path = os.path.join(output_root, '%s_checkpoints' % (flag))
     if not os.path.exists(dir_path):
@@ -111,7 +112,8 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
         kwar = {}
         cpu = torch.device("cpu")
     
-    model = torch.hub.load('pytorch/vision:v0.6.0', 'alexnet', pretrained=True)
+    model = torch.hub.load('pytorch/vision:v0.6.0', 'alexnet', pretrained=False)
+    model.features[0] = nn.Conv2d(n_channels, 64, kernel_size=11, stride=1, padding=1)
     model.classifier[4] = nn.Linear(4096,1024)
     model.classifier[6] = nn.Linear(1024, n_classes)
     model.to(device)
@@ -125,7 +127,10 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
 
     for epoch in trange(start_epoch, end_epoch):
         train(model, optimizer, criterion, train_loader, device, task)
-        val(model, val_loader, device, val_auc_list, task, dir_path, epoch)
+        epoch_return, auc_return = val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old)
+        if auc_return > auc_old:
+            epoch_old = epoch_return
+            auc_old = auc_return
 
     auc_list = np.array(val_auc_list)
     index = auc_list.argmax()
@@ -185,7 +190,7 @@ def train(model, optimizer, criterion, train_loader, device, task):
         optimizer.step()
 
 
-def val(model, val_loader, device, val_auc_list, task, dir_path, epoch):
+def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old):
     ''' validation function
     :param model: the model to validate
     :param val_loader: DataLoader of validation set
@@ -227,9 +232,18 @@ def val(model, val_loader, device, val_auc_list, task, dir_path, epoch):
         'auc': auc,
         'epoch': epoch,
     }
+    
+    if auc > auc_old:
+        print("old auc: ", auc_old)
+        print("new auc: ", auc)
+        
+        path = os.path.join(dir_path, 'ckpt_%d_auc_%.5f.pth' % (epoch, auc))
+        torch.save(state, path)
+        if epoch>1:
+            del_path = os.path.join(dir_path, 'ckpt_%d_auc_%.5f.pth' % (epoch_old, auc_old))
+            os.remove(del_path) 
 
-    path = os.path.join(dir_path, 'ckpt_%d_auc_%.5f.pth' % (epoch, auc))
-    torch.save(state, path)
+    return (epoch, auc)
 
 
 def test(model, split, data_loader, device, flag, task, output_root=None):

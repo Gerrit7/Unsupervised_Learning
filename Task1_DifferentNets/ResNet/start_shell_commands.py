@@ -3,7 +3,7 @@ import os
 #slices = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 slices = [0.1, 0.25, 0.5, 0.75]
 dataSets    = ["octmnist", "pneumoniamnist"] #"pathmnist",
-dataSets2   = ["retinamnist", "dermamnist", "breastmnist"] #"chestmnist",
+dataSets2   = [#"chestmnist","retinamnist", "dermamnist", "breastmnist"] 
 dataSets3   = ["organmnist_coronal", "organmnist_sagittal"]#"organmnist_axial",
 
 
