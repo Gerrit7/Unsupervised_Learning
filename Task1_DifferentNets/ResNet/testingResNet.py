@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
+import csv 
 
 from medmnist.models import ResNet18, ResNet50
 from medmnist.dataset import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIST, PneumoniaMNIST, RetinaMNIST, BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
@@ -155,6 +156,20 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
         auc = getAUC(y_true, y_score, task)
         acc = getACC(y_true, y_score, task)
         print('%s AUC: %.5f ACC: %.5f' % (split, auc, acc))
+
+        file_exists = os.path.isfile('../../../TrainedNets/Training_Resnet18_self/results.csv')
+        with open('../../../TrainedNets/Training_Resnet18_self/results.csv', 'a+', newline='') as csvfile:
+            fieldnames = ['Datensatz', 'Prozent des Trainingssatzes', 'Train/Validation/Test',
+                            'AUC', 'ACC']
+            
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()  # file doesn't exist yet, write a header
+            writer.writerow({   'Datensatz': flag, 
+                                'Prozent des Trainingssatzes': train_size,
+                                'Train/Validation/Test': split,
+                                'AUC' : auc,
+                                'ACC' : acc})
 
         """ if output_root is not None:
             output_dir = os.path.join(output_root, flag)

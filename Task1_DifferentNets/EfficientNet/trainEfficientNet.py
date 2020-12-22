@@ -115,7 +115,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
         cpu = torch.device("cpu")
     
     model = EfficientNet.from_name('efficientnet-b0')
-    #model.features[0] = nn.Conv2d(n_channels, 32, kernel_size=(3,3), stride=(2,2), padding=False)
+    #model._conv_stem = nn.Conv2dStaticSamePadding(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False)
     model._fc= nn.Linear(1280, n_classes)
     model.to(device)
     

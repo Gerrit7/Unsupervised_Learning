@@ -109,7 +109,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
 
     for epoch in trange(start_epoch, end_epoch):
         train(model, optimizer, criterion, train_loader, device, task)
-        val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_o)
+        val(model, val_loader, device, val_auc_list, task, dir_path, epoch)
 
     auc_list = np.array(val_auc_list)
     index = auc_list.argmax()
