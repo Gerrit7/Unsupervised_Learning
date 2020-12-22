@@ -1,0 +1,2 @@
+python trainTeacher.py --dataset_name cifar10 --data_root ../../DataSets --output_root evaluation --num_epoch 100 --train_size 1 --weight_decay 0.1 --model resnet18 --optimizer SGD --augmentations flip crop --download True 
+

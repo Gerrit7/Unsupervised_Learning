@@ -300,6 +300,6 @@ if __name__ == '__main__':
     main(data_name,
          input_root,
          output_root,
-         end_epoch=end_epoch,
+         end_epoch = end_epoch,
          trainSize = train_size,
-         download=download)
+         download = download)
