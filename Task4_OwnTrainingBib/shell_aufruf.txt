@@ -1,2 +1,2 @@
-python trainTeacher.py --dataset_name cifar10 --data_root ../../DataSets --output_root evaluation --num_epoch 100 --train_size 1 --weight_decay 0.1 --model resnet18 --optimizer SGD --augmentations flip crop --download True 
+python trainTeacher.py --dataset_name medmnist --data_root ../../DataSets/medmnist --output_root evaluation --num_epoch 100 --batch_size 128 --learning_rate 0.01 --momentum 0.9 --train_size 0.1 --weight_decay 0.1 --model resnet18 --optimizer SGD --loss_function CrossEntropyLoss --augmentations flip crop --download True
 

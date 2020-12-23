@@ -7,7 +7,7 @@ from datasets.medmnist.dataset import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIS
     BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
 from datasets.medmnist.info import INFO
 
-def prepareMedmnist(flag, input_root, output_root, end_epoch, batch_size, trainSize, download):
+def prepareMedmnist(flag, input_root, output_root, image_size, augmentations, batch_size, trainSize, download):
     flag_to_class = {
         "pathmnist": PathMNIST,
         "chestmnist": ChestMNIST,
@@ -23,27 +23,66 @@ def prepareMedmnist(flag, input_root, output_root, end_epoch, batch_size, trainS
     DataClass = flag_to_class[flag]
 
     train_dataset_scaled = []
-
+    transforms.CenterCrop
     flag = flag + "_" + str(trainSize)
 
     dir_path = os.path.join(output_root, '%s_checkpoints' % (flag))
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
 
+
+    aug_values = {
+	"CenterCrop"   : {"size": image_size},
+	"ColorJitter"  : {"brightness": 0, "contrast": 0, "saturation": 0, "hue": 0},
+	"GaussianBlur" : {"kernel": [3,3], "sigma" : 0.1},
+	"Normalize"    : {"mean": [0.5], "std": [0.5]},
+	"RandomHorizontalFlip" : {"probability": 0.5},
+	"RandomVerticalFlip" : {"probability": 0.5},
+	"RandomRotation" : {"degrees": [-20, 20]}	
+    }
+
     print('==> Preparing data...')
     
-    train_transform = transforms.Compose(
-        [transforms.ToTensor(),
-         transforms.Normalize(mean=[.5], std=[.5])])
+    train_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(image_size),
+        transforms.CenterCrop(aug_values["CenterCrop"]["size"]),
+        transforms.ColorJitter(brightness=aug_values["ColorJitter"]["brightness"], contrast=aug_values["ColorJitter"]["contrast"],
+                            saturation=aug_values["ColorJitter"]["saturation"], hue=aug_values["ColorJitter"]["hue"]),
+        transforms.GaussianBlur(kernel_size=aug_values["GaussianBlur"]["kernel"], sigma=aug_values["GaussianBlur"]["sigma"]),
+        transforms.Normalize(mean=aug_values["Normalize"]["mean"], std=aug_values["Normalize"]["std"]),
+        transforms.RandomHorizontalFlip(p=aug_values["RandomHorizontalFlip"]["probability"]),
+        transforms.RandomVerticalFlip(p=aug_values["RandomVerticalFlip"]["probability"]),
+        transforms.RandomRotation(degrees=aug_values["RandomRotation"]["degrees"])
+    ])
 
-    val_transform = transforms.Compose(
-        [transforms.ToTensor(),
-         transforms.Normalize(mean=[.5], std=[.5])])
+    val_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(image_size),
+        transforms.CenterCrop(aug_values["CenterCrop"]["size"]),
+        transforms.ColorJitter(brightness=aug_values["ColorJitter"]["brightness"], contrast=aug_values["ColorJitter"]["contrast"],
+                            saturation=aug_values["ColorJitter"]["saturation"], hue=aug_values["ColorJitter"]["hue"]),
+        transforms.GaussianBlur(kernel_size=aug_values["GaussianBlur"]["kernel"], sigma=aug_values["GaussianBlur"]["sigma"]),
+        transforms.Normalize(mean=aug_values["Normalize"]["mean"], std=aug_values["Normalize"]["std"]),
+        transforms.RandomHorizontalFlip(p=aug_values["RandomHorizontalFlip"]["probability"]),
+        transforms.RandomVerticalFlip(p=aug_values["RandomVerticalFlip"]["probability"]),
+        transforms.RandomRotation(degrees=aug_values["RandomRotation"]["degrees"])
+    ])
 
-    test_transform = transforms.Compose(
-        [transforms.ToTensor(),
-         transforms.Normalize(mean=[.5], std=[.5])])
+    test_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(image_size),
+        transforms.CenterCrop(aug_values["CenterCrop"]["size"]),
+        transforms.ColorJitter(brightness=aug_values["ColorJitter"]["brightness"], contrast=aug_values["ColorJitter"]["contrast"],
+                            saturation=aug_values["ColorJitter"]["saturation"], hue=aug_values["ColorJitter"]["hue"]),
+        transforms.GaussianBlur(kernel_size=aug_values["GaussianBlur"]["kernel"], sigma=aug_values["GaussianBlur"]["sigma"]),
+        transforms.Normalize(mean=aug_values["Normalize"]["mean"], std=aug_values["Normalize"]["std"]),
+        transforms.RandomHorizontalFlip(p=aug_values["RandomHorizontalFlip"]["probability"]),
+        transforms.RandomVerticalFlip(p=aug_values["RandomVerticalFlip"]["probability"]),
+        transforms.RandomRotation(degrees=aug_values["RandomRotation"]["degrees"])
+    ])
 
+    
     train_dataset = DataClass(root=input_root,
                                     split='train',
                                     transform=train_transform,

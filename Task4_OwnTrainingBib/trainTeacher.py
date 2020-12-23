@@ -28,8 +28,9 @@ def main(data_name,
          momentum,
          train_size,
          weight_decay,
-         model,
+         model_input,
          optimizer,
+         loss_function,
          augmentations,
          download):
 
@@ -42,7 +43,7 @@ def main(data_name,
     print(momentum)
     print(train_size)
     print(weight_decay)
-    print(model)
+    print(model_input)
     print(optimizer)
     print(augmentations)
     print(download)
@@ -63,9 +64,7 @@ def main(data_name,
             else:
                 break
         
-        # Prepare Dataset
-        train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(dataset_name, data_root, output_root, num_epoch, batch_size, train_size, download)
-
+        
         info = INFO[dataset_name]
         task = info['task']
         n_channels = info['n_channels']
@@ -73,7 +72,7 @@ def main(data_name,
         val_auc_list = []
         epoch_old = 0
         auc_old = 0
-
+        flag = dataset_name
         dataset_name = dataset_name + "_" + str(train_size)
 
         dir_path = os.path.join(output_root, '%s_checkpoints' % (dataset_name))
@@ -82,13 +81,16 @@ def main(data_name,
 
         
         
-        if model == 'resnet18':
+        if model_input == 'resnet18':
             model = ResNet18(in_channels=n_channels, num_classes=n_classes).to(device)
+            train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, 28, augmentations, batch_size, train_size, download)
             print('using ResNet18')
-        elif model == 'resnet50':
+        elif model_input == 'resnet50':
             model = ResNet50(in_channels=n_channels, num_classes=n_classes).to(device)
             print('using ResNet50')
-        elif model == 'efficientnet':
+        elif model_input == 'efficientnet':
+            train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, 224, augmentations, batch_size, train_size, download)
+
             model = EfficientNet.from_name('efficientnet-b0',n_channels)
             model._fc= nn.Linear(1280, n_classes)
             model.to(device)
@@ -196,7 +198,7 @@ if __name__ == '__main__':
                         default=0,
                         help='adds L2 penalty to the cost which leads to smaller model weights',
                         type=float)
-    parser.add_argument('--model',
+    parser.add_argument('--model_input',
                         default='resnet18',
                         help='used model',
                         type=str)
@@ -204,6 +206,10 @@ if __name__ == '__main__':
                         default='SQD',
                         help='used optimizer',
                         type=str)
+    parser.add_argument('--loss_function',
+                        default='CrossEntropyLoss',
+                        help='used loss function',
+                        type=str)                  
     parser.add_argument('--augmentations',
                         help='list of possible augmentations [crop, flip, colorjitter]',
                         nargs='*')
@@ -222,8 +228,9 @@ if __name__ == '__main__':
     momentum = args.momentum
     train_size = args.train_size
     weight_decay = args.weight_decay
-    model = args.model
+    model_input = args.model_input
     optimizer = args.optimizer
+    loss_function = args.loss_function
     augmentations = args.augmentations
     download = args.download
 
@@ -236,8 +243,9 @@ if __name__ == '__main__':
          momentum = momentum,
          train_size = train_size,
          weight_decay = weight_decay,
-         model = model,
+         model_input = model_input,
          optimizer = optimizer,
+         loss_function = loss_function,
          augmentations = augmentations,
          download = download)
         
