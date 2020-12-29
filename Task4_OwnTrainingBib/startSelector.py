@@ -50,8 +50,8 @@ def main(dataset_name,
          momentum,
          train_size,
          weight_decay,
-         model_input,
          net_input,
+         model_input,
          optimizer,
          loss_function,
          augmentations,
@@ -89,28 +89,28 @@ def main(dataset_name,
 
         
         
-        if model_input == 'Resnet18':
+        if net_input == 'Resnet18':
             model = ResNet18(in_channels=n_channels, num_classes=n_classes).to(device)
             train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, 28, augmentations, batch_size, train_size, download)
             print('using ResNet18')
-        elif model_input == 'Resnet50':
+        elif net_input == 'Resnet50':
             model = ResNet50(in_channels=n_channels, num_classes=n_classes).to(device)
             print('using ResNet50')
-        elif model_input == 'EfficientNet-b0':
+        elif net_input == 'EfficientNet-b0':
             train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, 224, augmentations, batch_size, train_size, download)
 
             model = EfficientNet.from_name('EfficientNet-b0',n_channels)
             model._fc= nn.Linear(1280, n_classes)
             model.to(device)
             print('using EfficientNet-b0')
-        elif model_input == 'EfficientNet-b1':
+        elif net_input == 'EfficientNet-b1':
             train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, 224, augmentations, batch_size, train_size, download)
 
             model = EfficientNet.from_name('EfficientNet-b1',n_channels)
             model._fc= nn.Linear(1280, n_classes)
             model.to(device)
             print('using EfficientNet-b1')
-        elif model_input == 'EfficientNet-b7':
+        elif net_input == 'EfficientNet-b7':
             train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, 224, augmentations, batch_size, train_size, download)
 
             model = EfficientNet.from_name('EfficientNet-b7',n_channels)
