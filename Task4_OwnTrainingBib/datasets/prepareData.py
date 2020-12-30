@@ -7,7 +7,7 @@ from datasets.medmnist.dataset import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIS
     BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
 from datasets.medmnist.info import INFO
 
-def prepareMedmnist(flag, input_root, output_root, image_size, augmentations, batch_size, trainSize, download):
+def prepareMedmnist(flag, input_root, output_root, net_input, image_size, augmentations, batch_size, trainSize, download):
     flag_to_class = {
         "pathmnist": PathMNIST,
         "chestmnist": ChestMNIST,
@@ -42,6 +42,8 @@ def prepareMedmnist(flag, input_root, output_root, image_size, augmentations, ba
     }
 
     tranform_compose_list = [transforms.ToTensor()]
+    if net_input == "EfficientNet-b0" or net_input == "EfficientNet-b1" or net_input == "EfficientNet-b7":
+        tranform_compose_list.append(transforms.Resize(256))
     for aug in augmentations:
         if aug == "centerCrop":
             tranform_compose_list.append(transforms.CenterCrop(

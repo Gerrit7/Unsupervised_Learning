@@ -59,17 +59,17 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
 
     print('==> Preparing data...')
     train_transform = transforms.Compose(
-        [transforms.Resize(32),
+        [#transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=[.5], std=[.5])])
 
     val_transform = transforms.Compose(
-        [transforms.Resize(32),
+        [#transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=[.5], std=[.5])])
 
     test_transform = transforms.Compose(
-        [transforms.Resize(32),
+        [#transforms.Resize(224),
         transforms.ToTensor(),
          transforms.Normalize(mean=[.5], std=[.5])])
 
@@ -115,6 +115,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
         cpu = torch.device("cpu")
     
     model = EfficientNet.from_name('efficientnet-b0')
+    print(model)
     #model._conv_stem = nn.Conv2dStaticSamePadding(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False)
     model._fc= nn.Linear(1280, n_classes)
     model.to(device)
