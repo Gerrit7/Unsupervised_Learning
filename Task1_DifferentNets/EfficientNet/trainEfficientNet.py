@@ -11,6 +11,7 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 
 from efficientnet_pytorch import EfficientNet
+from efficientnet_pytorch.utils import Conv2dStaticSamePadding
 from medmnist.models import ResNet18, ResNet50
 from medmnist.dataset import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIST, PneumoniaMNIST, RetinaMNIST, \
     BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
@@ -45,7 +46,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
 
     start_epoch = 0
     lr = 0.001
-    batch_size = 8 #128
+    batch_size = 128
     val_auc_list = []
     train_dataset_scaled = []
     epoch_old = 0
@@ -59,17 +60,17 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
 
     print('==> Preparing data...')
     train_transform = transforms.Compose(
-        [#transforms.Resize(224),
+        [transforms.Resize(32),
         transforms.ToTensor(),
         transforms.Normalize(mean=[.5], std=[.5])])
 
     val_transform = transforms.Compose(
-        [#transforms.Resize(224),
+        [transforms.Resize(32),
         transforms.ToTensor(),
         transforms.Normalize(mean=[.5], std=[.5])])
 
     test_transform = transforms.Compose(
-        [#transforms.Resize(224),
+        [transforms.Resize(32),
         transforms.ToTensor(),
          transforms.Normalize(mean=[.5], std=[.5])])
 
@@ -116,7 +117,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
     
     model = EfficientNet.from_name('efficientnet-b0')
     print(model)
-    #model._conv_stem = nn.Conv2dStaticSamePadding(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False)
+    #model._conv_stem = Conv2dStaticSamePadding(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False, image_size =32)
     model._fc= nn.Linear(1280, n_classes)
     model.to(device)
     
