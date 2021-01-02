@@ -47,7 +47,7 @@ def main(flag, dataset_root, model_root, trainSize, download):
 
     start_epoch = 0
     lr = 0.001
-    batch_size = 8#128
+    batch_size = 128
     val_auc_list = []
     train_dataset_scaled = []
     epoch_old = 0
@@ -55,17 +55,17 @@ def main(flag, dataset_root, model_root, trainSize, download):
 
     print('==> Preparing data...')
     train_transform = transforms.Compose(
-        [transforms.Resize(224),
+        [transforms.Resize(32),
          transforms.ToTensor(),
          transforms.Normalize(mean=[.5], std=[.5])])
 
     val_transform = transforms.Compose(
-        [transforms.Resize(224),
+        [transforms.Resize(32),
          transforms.ToTensor(),
          transforms.Normalize(mean=[.5], std=[.5])])
 
     test_transform = transforms.Compose(
-        [transforms.Resize(224),
+        [transforms.Resize(32),
          transforms.ToTensor(),
          transforms.Normalize(mean=[.5], std=[.5])])
 
@@ -80,39 +80,37 @@ def main(flag, dataset_root, model_root, trainSize, download):
 
     train_loader = data.DataLoader(dataset=train_dataset_scaled,
                                    batch_size=batch_size,
-                                   shuffle=True,
-                                   drop_last=True)
+                                   shuffle=True)
     val_dataset = DataClass(root=dataset_root,
                                   split='val',
                                   transform=val_transform,
                                   download=download)
     val_loader = data.DataLoader(dataset=val_dataset,
                                  batch_size=batch_size,
-                                 shuffle=True,
-                                 drop_last=True)
+                                 shuffle=True)
     test_dataset = DataClass(root=dataset_root,
                                    split='test',
                                    transform=test_transform,
                                    download=download)
     test_loader = data.DataLoader(dataset=test_dataset,
                                   batch_size=batch_size,
-                                  shuffle=True,
-                                  drop_last=True)
+                                  shuffle=True)
 
     print('Train: ', len(train_dataset_scaled), ', Valid: ', len(val_dataset), ', Test: ', len(test_dataset))
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EfficientNet.from_name('efficientnet-b0')
-    model._conv_stem = Conv2dStaticSamePadding(n_channels, 32, kernel_size=(3, 3), stride=(2, 2), bias=False)
+    #model._conv_stem = Conv2dStaticSamePadding(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False, image_size =32)
     model._fc= nn.Linear(1280, n_classes)
-    print(model)
+
     print('==> Testing model...')
 
     for file in os.listdir(os.path.join(model_root,'%s_%.2f' % (flag, trainSize))):
         if file.endswith(".pth"):
             restore_model_path = os.path.join(os.path.join(model_root,'%s_%.2f' % (flag, trainSize)),file)
-    model.to(device)
+
     model.load_state_dict(torch.load(restore_model_path, map_location=device)['net'])
+    model.to(device)
 
     test(model,
             'train',
@@ -121,7 +119,15 @@ def main(flag, dataset_root, model_root, trainSize, download):
             flag,
             task,
             output_root=model_root)
-    test(model, 'val', val_loader, device, flag, task, output_root=model_root)
+    
+    test(model, 
+        'val', 
+        val_loader, 
+        device, 
+        flag, 
+        task, 
+        output_root=model_root)
+
     test(model,
             'test',
             test_loader,

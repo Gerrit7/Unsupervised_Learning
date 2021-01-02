@@ -133,7 +133,9 @@ class Inception_ResNet_C(nn.Module):
 
 
 class Inception_ResNetv2(nn.Module):
-    def __init__(self, in_channels=3, classes=1000, k=256, l=256, m=384, n=384):
+    def __init__(self, in_channels, classes=1000, k=256, l=256, m=384, n=384):
+        self.in_channels = in_channels
+        print(self.in_channels)
         super(Inception_ResNetv2, self).__init__()
         blocks = []
         blocks.append(Stem(in_channels))
