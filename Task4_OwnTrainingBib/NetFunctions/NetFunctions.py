@@ -190,6 +190,44 @@ def getACC(y_true, y_score, task, threshold=0.5):
             y_pre[i] = np.argmax(y_score[i])
         return accuracy_score(y_true, y_pre)
 
+def createPseudoLabel(model, split, data_loader, device, flag, task, output_root=None):
+    ''' testing function
+    :param model: the model to test
+    :param split: the data to test, 'train/val/test'
+    :param data_loader: DataLoader of data
+    :param device: cpu or cuda
+    :param flag: subset name
+    :param task: task of current dataset, binary-class/multi-class/multi-label, binary-class
+
+    '''
+    model.eval()
+    pseudo_set = torch.tensor([]).to(device)
+
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(data_loader):
+            outputs = model(inputs.to(device))
+
+            if task == 'multi-label, binary-class':
+                targets = targets.to(torch.float32).to(device)
+                m = nn.Sigmoid()
+                outputs = m(outputs).to(device)
+            else:
+                targets = targets.squeeze().long().to(device)
+                m = nn.Softmax(dim=1)
+                outputs = m(outputs).to(device)
+                targets = targets.float().resize_(len(targets), 1)
+
+            pseudo_set = torch.cat((pseudo_set, targets), 0)
+            print(pseudo_set)
+        pseudo_set = pseudo_set.cpu().numpy()
+
+        if output_root is not None:
+            output_dir = os.path.join(output_root, flag)
+            if not os.path.exists(output_dir):
+                os.mkdir(output_dir)
+            output_path = os.path.join(output_dir, '%s.csv' % (split))
+            save_results(pseudo_set, output_path)
+
 
 def save_results(y_true, y_score, outputpath):
     '''Save ground truth and scores
