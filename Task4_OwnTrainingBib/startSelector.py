@@ -1,3 +1,6 @@
+'''
+This function is the Selector GUI for CNN Training, the selected entries start the main function
+'''
 from mainFunction import main
 
 from tkinter import ttk
@@ -13,17 +16,17 @@ def sel():
    selection = "You selected the net-structure " + str(var.get())
    #label.config(text = selection)
     
-def sel_model():
-    selection_model = "You selected the model " + str(var_model.get())
-    #label_model.config(text = selection_model)
+def sel_task():
+    selection_task = "You selected the task " + str(var_task.get())
+    #label_model.config(text = selection_task)
 
 def sel_optimizer():
-    selection_model = "You selected the optimizer " + str(var_optimizer.get())
-    #label_model.config(text = selection_model)
+    selection_optimizer = "You selected the optimizer " + str(var_optimizer.get())
+    #label_optimizer.config(text = selection_optimizer)
     
 def sel_lossfun():
-    selection_model = "You selected the loss function " + str(var_lossfun.get())
-    #label_model.config(text = selection_model)
+    selection_lossfun = "You selected the loss function " + str(var_lossfun.get())
+    #label_lossfun.config(text = selection_lossfun)
     
 def sel_medmnist():
     D11_var.set(False)
@@ -52,19 +55,20 @@ def submit():
     augmentations = [c1_var.get(), c2_var.get(), c3_var.get(), c4_var.get(), c5_var.get(), c6_var.get(), c7_var.get()]
     global net_input
     net_input = var.get()
-    global model
-    model = var_model.get()
+    global task
+    task = var_task.get()
     global optimizer
     optimizer = var_optimizer.get()
     global lossfun
     lossfun = var_lossfun.get()
     
+    # some tasks have to be selected before the app can continue
     if data_name == []:
         print("Please select at least one dataset!")
     elif net_input == "":
         print("Please select Net Structure!")
-    elif model == "":
-        print("Please select Model!")
+    elif task == "":
+        print("Please select Task!")
     elif optimizer == "":
         print("Please select an optimizer!")
     elif lossfun == "":
@@ -84,6 +88,7 @@ def submit():
         weight_decay = e6_var.get()
         
         root.destroy()
+        # start the main function for every selected dataset
         for i in range(len(data_name)):
             main(data_name[i],
              data_root_complete.get(),
@@ -96,7 +101,7 @@ def submit():
              weight_decay,
              net_input,
              var_switch,
-             model,
+             task,
              optimizer,
              lossfun,
              augmentations,
@@ -123,7 +128,7 @@ data_name = []
 
 root = tk.Tk()
 root.title('CNN Selector')
-root.geometry("900x600")
+root.geometry("1035x600")
 
 D1_var = StringVar()
 D2_var = StringVar()
@@ -136,7 +141,8 @@ D8_var = StringVar()
 D9_var = StringVar()
 D10_var = StringVar()
 D11_var = StringVar()
- 
+
+# Area for selecting the datasets
 menubutton = tk.Menubutton(text="Select Dataset",indicatoron=True, borderwidth=1, relief="raised")
 menu = tk.Menu(menubutton, tearoff=False)
 menubutton.configure(menu=menu)
@@ -154,7 +160,7 @@ for choice in range(len(labels)):
 label_dataset = Label(root, text="Please select dataset!",height = 4, wraplength=250)
 label_dataset.grid(row=0, padx='5', pady='5',sticky='ew')
 
-
+# area for browsing for data and output directories
 Label(root, text = "Directories", bd=1, relief="solid", width = 56, height = 2).grid(row=1 ,column = 0, padx='0', pady='0',sticky='ew',columnspan=3)
 data_root = StringVar()
 data_root_complete = StringVar()
@@ -165,13 +171,7 @@ output_root_label = Label(master=root,textvariable=output_root, wraplength=250, 
 browse_data_button = Button(text="Browse Dataset Root", command=browse_data).grid(row=2 ,column = 0, padx='5', pady='5',sticky='ew')
 browse_output_button = Button(text="Browse Output Root", command=browse_output).grid(row=3 ,column = 0, padx='5', pady='5',sticky='ew')
 
-#Setting Defaults
-data_root.set("/DataSets/medmnist")
-data_root_complete.set("/Users/gerrit/Documents/Master-Thesis/DataSets/medmnist")
-output_root.set("/Master-Thesis/TrainedNets/")
-output_root_complete.set("/Users/gerrit/Documents/Master-Thesis/TrainedNets/")
-
-
+# area for selecting the operation type (training - prediction)
 Label(root, text = "Operation", bd=1, relief="solid", width = 56, height = 2).grid(row=4 ,column = 0, columnspan=3, padx='0', pady='0',sticky='ew')
 var_switch = BooleanVar()
 var_switch.set(False)
@@ -182,7 +182,7 @@ tk.Label(root, text = "prediction", bd=1, relief="solid", width = 15, height = 2
 
 
 
-
+# area for selecting the used net structure
 Label(root, text = "NetStructure", bd=1, relief="solid", width = 56, height = 2).grid(row=7 ,column = 0, columnspan=3, padx='0', pady='0',sticky='ew')
 
 var = StringVar()
@@ -210,10 +210,8 @@ R7 = Radiobutton(root, text="AlexNet", variable=var, value="AlexNet",
                   command=sel)
 R7.grid(row=8 ,column = 2, padx='5', pady='5',sticky='ew')
 
-#label = Label(root)
-#label.place(x=50, y=145)
 
-
+# area for selecting the used optimizer
 Label(root, text = "Optimizer", bd=1, relief="solid", width = 56, height = 2).grid(row=11 ,column = 0, columnspan=3, padx='0', pady='0',sticky='ew')
 
 var_optimizer = StringVar()
@@ -230,7 +228,7 @@ Op3 = Radiobutton(root, text="RMSProp", variable=var_optimizer, value="RMSprop",
 Op3.grid(row=12 ,column = 2, padx='5', pady='5',sticky='ew')
 
 
-
+# area for selecting the used loss function
 Label(root, text = "Loss Function", bd=1, relief="solid", width = 56, height = 2).grid(row=13 ,column = 0, columnspan=3, padx='0', pady='0',sticky='ew')
 
 var_lossfun = StringVar()
@@ -252,7 +250,7 @@ Loss3.grid(row=15 ,column = 1, padx='5', pady='5',sticky='ew')
 
 
 
-
+# area for selecting the used augmentations (multiple selection possible)
 Label(root, text = "Augmentations", bd=1, relief="solid", width = 56, height = 2).grid(row=1 ,column = 4,columnspan=4, padx='0', pady='0',sticky='ew')
 c1_var = StringVar()
 c2_var = StringVar()
@@ -285,30 +283,29 @@ c7.grid(row=2 ,column = 6, padx='5', pady='5',sticky='ew')
 
 
 
+# area for selecting the used tasks
+Label(root, text = "Task", bd=1, relief="solid", width = 56, height = 2).grid(row=4 ,column =4, columnspan=4, padx='0', pady='0',sticky='ew')
 
-Label(root, text = "Model", bd=1, relief="solid", width = 56, height = 2).grid(row=4 ,column =4, columnspan=4, padx='0', pady='0',sticky='ew')
-
-var_model = StringVar()
-M1 = Radiobutton(root, text="Pseudolabel", variable=var_model, value="Pseudolabel",
-                  command=sel_model)
+var_task = StringVar()
+M1 = Radiobutton(root, text="Pseudolabel", variable=var_task, value="Pseudolabel",
+                  command=sel_task)
 M1.grid(row=5 ,column = 4, padx='5', pady='5',sticky='ew')
 
-M2 = Radiobutton(root, text="MTSS", variable=var_model, value="MTSS",
-                  command=sel_model)
+M2 = Radiobutton(root, text="MTSS", variable=var_task, value="MTSS",
+                  command=sel_task)
 M2.grid(row=6 ,column = 4, padx='5', pady='5',sticky='ew')
 
-M3 = Radiobutton(root, text="NoisyStudent", variable=var_model, value="NoisyStudent",
-                  command=sel_model)
+M3 = Radiobutton(root, text="NoisyStudent", variable=var_task, value="NoisyStudent",
+                  command=sel_task)
 M3.grid(row=5 ,column = 5, padx='5', pady='5',sticky='ew')
 
-M4 = Radiobutton(root, text="BaseLine", variable=var_model, value="BaseLine",
-                  command=sel_model)
+M4 = Radiobutton(root, text="BaseLine", variable=var_task, value="BaseLine",
+                  command=sel_task)
 M4.grid(row=6 ,column = 5, padx='5', pady='5',sticky='ew')
 
-#label_model = Label(root)
-#label_model.place(x=50, y=330)
 
 
+# area for selecting the used parameters
 Label(root, text = "Parameters", bd=1, relief="solid", width = 56, height = 2).grid(row=7 ,column = 4, columnspan=4, padx='0', pady='0',sticky='ew')
 
 Label(root, text="Epochs").grid(row=8 ,column = 4, padx='5', pady='5',sticky='ew')
@@ -325,12 +322,6 @@ e4_var = DoubleVar()
 e5_var = IntVar()
 e6_var = DoubleVar() 
 
-e1_var.set(100)
-e2_var.set(8)
-e3_var.set(0.001)
-e4_var.set(0.9)
-e5_var.set(100)
-e6_var.set(0)
 
 e1 = Entry(root,textvariable=e1_var).grid(row=8 ,column = 5, padx='5', pady='5',sticky='ew')
 e2 = Entry(root,textvariable=e2_var).grid(row=9 ,column = 5, padx='5', pady='5',sticky='ew')
@@ -340,8 +331,21 @@ e5 = Entry(root,textvariable=e5_var).grid(row=9 ,column = 7, padx='5', pady='5',
 e6 = Entry(root,textvariable=e6_var).grid(row=10 ,column = 7, padx='5', pady='5',sticky='ew')
 
 
+# submit button for starting the main function
 SubmitButton = Button(root, text="Submit", command=submit)
 SubmitButton.grid(row=12 ,column = 5, columnspan=2, padx='5', pady='5',sticky='ew')
+
+#Setting Defaults
+data_root.set("/DataSets/medmnist")
+data_root_complete.set("/Users/gerrit/Documents/Master-Thesis/DataSets/medmnist")
+output_root.set("/Master-Thesis/TrainedNets/")
+output_root_complete.set("/Users/gerrit/Documents/Master-Thesis/TrainedNets/")
+e1_var.set(100)
+e2_var.set(8)
+e3_var.set(0.001)
+e4_var.set(0.9)
+e5_var.set(100)
+e6_var.set(0)
 
 root.mainloop()
 

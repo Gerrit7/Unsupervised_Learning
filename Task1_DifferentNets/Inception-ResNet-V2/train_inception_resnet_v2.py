@@ -10,6 +10,7 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import csv 
+import glob
 
 
 from medmnist.models import ResNet18, ResNet50
@@ -19,7 +20,7 @@ from medmnist.evaluator import getAUC, getACC, save_results
 from medmnist.info import INFO
 from model.inception_resnet_v2 import Inception_ResNetv2
 
-def main(flag, input_root, output_root, end_epoch, trainSize, download):
+def main(flag, input_root, output_root, end_epoch, trainSize, download, continueTrain):
     ''' main function
     :param flag: name of subset
 
@@ -113,8 +114,6 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
     
     model = Inception_ResNetv2(n_channels)
     model.linear= nn.Linear(1536, n_classes, True)
-    model.to(device)
-    print(model)
 
     if task == "multi-label, binary-class":
         criterion = nn.BCEWithLogitsLoss()
@@ -123,11 +122,26 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
 
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
+    if continueTrain == True:
+        # loading old checkpoint for further training
+        print(dir_path)
+        list_of_files = glob.glob(dir_path + "/*")
+        latest_file = max(list_of_files, key=os.path.getctime)
+        filename = latest_file
+        print(filename)
+        model, optimizer, start_epoch, val_auc_list = load_checkpoint(model, optimizer, val_auc_list, filename)
+        # now individually transfer the optimizer parts...
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(device)
+    model.to(device)
     for epoch in trange(start_epoch, end_epoch):
         train(model, optimizer, criterion, train_loader, device, task)
-        val(model, val_loader, device, val_auc_list, task, dir_path, epoch)
+        val(model, val_loader, device, val_auc_list, task, dir_path, epoch, optimizer)
 
     auc_list = np.array(val_auc_list)
+    print(auc_list)
     index = auc_list.argmax()
     print('epoch %s is the best model' % (index))
 
@@ -151,7 +165,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
          flag,
          task,
          output_root=output_root)
-    
+    print(auc_list)
     save_best_model_path = os.path.join( 
         os.path.join(output_root, flag), 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
     copyfile(restore_model_path, save_best_model_path)
@@ -185,7 +199,7 @@ def train(model, optimizer, criterion, train_loader, device, task):
         optimizer.step()
 
 
-def val(model, val_loader, device, val_auc_list, task, dir_path, epoch):
+def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, optimizer):
     ''' validation function
     :param model: the model to validate
     :param val_loader: DataLoader of validation set
@@ -224,8 +238,9 @@ def val(model, val_loader, device, val_auc_list, task, dir_path, epoch):
 
     state = {
         'net': model.state_dict(),
-        'auc': auc,
-        'epoch': epoch,
+        'auc': val_auc_list,
+        'epoch': epoch + 1,
+        'optimizer': optimizer.state_dict(),
     }
 
     path = os.path.join(dir_path, 'ckpt_%d_auc_%.5f.pth' % (epoch, auc))
@@ -279,10 +294,10 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
 
         file_exists = os.path.isfile('../../../TrainedNets/Inception_ResNet_V2/results.csv')
         with open('../../../TrainedNets/Inception_ResNet_V2/results.csv', 'a+', newline='') as csvfile:
-            #fieldnames = ['Datensatz', 'Prozent des Trainingssatzes', 'Train/Validation/Test',
-            #                'AUC', 'ACC']
+            fieldnames = ['Datensatz', 'Prozent des Trainingssatzes', 'Train/Validation/Test',
+                            'AUC', 'ACC']
             
-            #writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()  # file doesn't exist yet, write a header
             writer.writerow({   'Datensatz': flag, 
@@ -290,6 +305,27 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
                                 'Train/Validation/Test': split,
                                 'AUC' : auc,
                                 'ACC' : acc})
+
+def load_checkpoint(model, optimizer, val_auc_list, filename='checkpoint.pth.tar'):
+    # Note: Input model & optimizer should be pre-defined.  This routine only updates their states.
+    start_epoch = 0
+    if os.path.isfile(filename):
+        print("=> loading checkpoint '{}'".format(filename))
+        checkpoint = torch.load(filename)
+        print("loading epoch")
+        start_epoch = checkpoint['epoch']
+        print("loading model")
+        model.load_state_dict(checkpoint['net'])
+        print("loading optimizer")
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        print("loading auc_list")
+        val_auc_list = checkpoint['auc']
+        print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(filename, checkpoint['epoch']))
+    else:
+        print("=> no checkpoint found at '{}'".format(filename))
+
+    return model, optimizer, start_epoch, val_auc_list
 
 
 if __name__ == '__main__':
@@ -316,9 +352,13 @@ if __name__ == '__main__':
                         help='size of trainingdata',
                         type=float)
     parser.add_argument('--download',
-                        default=True,
                         help='whether download the dataset or not',
-                        type=bool)
+                        default=True,
+                        action='store_true')
+    parser.add_argument('--continue_train',
+                        help='continue training?',
+                        default=True,
+                        action='store_false')
 
     args = parser.parse_args()
     data_name = args.data_name.lower()
@@ -327,9 +367,12 @@ if __name__ == '__main__':
     end_epoch = args.num_epoch
     train_size = args.train_size
     download = args.download
+    continue_train = args.continue_train
+    print(download)
     main(data_name,
          input_root,
          output_root,
          end_epoch = end_epoch,
          trainSize = train_size,
-         download = download)
+         download = download,
+         continueTrain = continue_train)

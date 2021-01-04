@@ -34,7 +34,7 @@ def train(model, optimizer, criterion, train_loader, device, task):
         optimizer.step()
 
 
-def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old):
+def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, optimizer):
     ''' validation function
     :param model: the model to validate
     :param val_loader: DataLoader of validation set
@@ -258,3 +258,24 @@ def save_results(y_true, y_score, outputpath):
         df = df.append(df_insert, ignore_index=True)
 
     df.to_csv(outputpath, sep=',', index=False, header=True, encoding="utf_8_sig")
+
+def load_checkpoint(model, optimizer, val_auc_list, filename='checkpoint.pth.tar'):
+    # Note: Input model & optimizer should be pre-defined.  This routine only updates their states.
+    start_epoch = 0
+    if os.path.isfile(filename):
+        print("=> loading checkpoint '{}'".format(filename))
+        checkpoint = torch.load(filename)
+        print("loading epoch")
+        start_epoch = checkpoint['epoch']
+        print("loading model")
+        model.load_state_dict(checkpoint['net'])
+        print("loading optimizer")
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        print("loading auc_list")
+        val_auc_list = checkpoint['auc']
+        print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(filename, checkpoint['epoch']))
+    else:
+        print("=> no checkpoint found at '{}'".format(filename))
+
+    return model, optimizer, start_epoch, val_auc_list
