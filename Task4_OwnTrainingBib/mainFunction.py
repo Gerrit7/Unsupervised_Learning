@@ -43,6 +43,7 @@ def main(dataset_name,
     print(train_size)
     print(weight_decay)
     print(net_input)
+    print(mode)
     print(model_input)
     print(optimizer)
     print(augmentations)
@@ -63,8 +64,8 @@ def main(dataset_name,
         dir_path = os.path.join(output_root, '%s_checkpoints' % (dataset_name))
         print(dir_path)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        if mode == 0:
+        
+        if mode.get() == False: # training
             # creating model and training data
             if net_input == 'Resnet18':
                 model = ResNet18(in_channels=n_channels, num_classes=n_classes).to(device)
@@ -178,7 +179,7 @@ def main(dataset_name,
                     epoch_old = epoch_return
                     auc_old = auc_return
 
-        else:
+        else: # prediction mode
             print("prediction mode")
 
 
