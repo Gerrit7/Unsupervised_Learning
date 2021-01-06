@@ -22,7 +22,6 @@ class SupervisedLearning():
 
         self.model.train()
         for batch_idx, (inputs, targets) in enumerate(train_loader):
-            print(batch_idx)
             self.optimizer.zero_grad()
             outputs = self.model(inputs.to(self.device))
 

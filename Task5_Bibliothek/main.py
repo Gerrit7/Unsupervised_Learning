@@ -147,12 +147,7 @@ def main(dataset_name,
         # create Operations instance
         supervisedlearning = SupervisedLearning(model, optimizer, scheduler, criterion, device)
         
-        print(optimizer)
-        print(criterion)
-        
-        print(len(train_loader_labeled))
-        print(train_loader_labeled)
-        print(model)
+
         # start training
         for epoch in trange(start_epoch, num_epoch):
             optimizer, loss = supervisedlearning.train_labeled(train_loader_labeled, task)
