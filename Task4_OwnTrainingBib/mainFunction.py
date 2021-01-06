@@ -34,26 +34,29 @@ def main(dataset_name,
          mode,
          task_input,
          optimizer,
+         decayLr,
+         milestone_count,
          loss_function,
          augmentations,
          download):
     
-    print(dataset_name)
-    print(data_root)
-    print(output_root)
-    print(num_epoch)
-    print(batch_size)
-    print(learning_rate)
-    print(momentum)
-    print(train_size)
-    print(weight_decay)
-    print(net_input)
-    print(mode)
-    print(task_input)
-    print(optimizer)
-    print(augmentations)
-    print(download)
-
+    # print(dataset_name)
+    # print(data_root)
+    # print(output_root)
+    # print(num_epoch)
+    # print(batch_size)
+    # print(learning_rate)
+    # print(momentum)
+    # print(train_size)
+    # print(weight_decay)
+    # print(net_input)
+    # print(mode)
+    # print(task_input)
+    # print(optimizer)
+    # print(augmentations)
+    # print(download)
+    
+    start_epoch = 0
     # Setting information depending on selected dataset 
     if dataset_name != 'cifar10':
            
@@ -64,8 +67,9 @@ def main(dataset_name,
         val_auc_list = []
         epoch_old = 0
         auc_old = 0
+        loss = 0
         flag = dataset_name
-        dataset_name = dataset_name + "_" + str(train_size)
+        dataset_name = dataset_name + "_" + '%.2f' % train_size
         dir_path = os.path.join(output_root, '%s_checkpoints' % (dataset_name))
     
     elif dataset_name == 'cifar10':
@@ -97,13 +101,13 @@ def main(dataset_name,
     if net_input == 'Resnet18':
         model = ResNet18(in_channels=n_channels, num_classes=n_classes).to(device)
         image_size = 28
-        train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
+        train_loader, train_loader_unused_data, val_loader, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
         print('using ResNet18')
     
     elif net_input == 'Resnet50':
         model = ResNet50(in_channels=n_channels, num_classes=n_classes).to(device)
         image_size = 28
-        train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
+        train_loader, train_loader_unused_data, val_loader, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
         print('using ResNet50')
     
     elif net_input == 'EfficientNet-b0':
@@ -111,7 +115,7 @@ def main(dataset_name,
         model._fc= nn.Linear(1280, n_classes)
         model.to(device)
         image_size = 224
-        train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
+        train_loader, train_loader_unused_data, val_loader, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
         print('using EfficientNet-b0')
     
     elif net_input == 'EfficientNet-b1':
@@ -119,7 +123,7 @@ def main(dataset_name,
         model._fc= nn.Linear(1280, n_classes)
         model.to(device)
         image_size = 224
-        train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
+        train_loader, train_loader_unused_data, val_loader, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
         print('using EfficientNet-b1')
     
     elif net_input == 'EfficientNet-b7':
@@ -127,19 +131,18 @@ def main(dataset_name,
         model._fc= nn.Linear(1280, n_classes)
         model.to(device)
         image_size = 224
-        train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
+        train_loader, train_loader_unused_data, val_loader, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
         print('using EfficientNet-b7')
     
     elif net_input == 'Inception-Resnet-V2':
         model = Inception_ResNetv2(n_channels)
         model.linear= nn.Linear(1536, n_classes, True)
         image_size = 256
-        train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
+        train_loader, train_loader_unused_data, val_loader, test_loader = prepareMedmnist(flag, data_root, output_root, net_input, image_size, augmentations, batch_size, train_size, download)
         print('using Inception-Resnet-V2')
 
     else:
         print("Net not found!")
-
 
     # setting up the loss function
     if loss_function == "crossentropyloss":
@@ -167,29 +170,37 @@ def main(dataset_name,
     else:
         print("undefined optimizer: taking default SGD")
         optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
-
-
+    
     if task_input == "BaseLine":
         print("creating Baseline-Training")
         # check wheather a training session has already startet for this dataset
-        if os.path.isdir(dir_path):
+        if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
             # loading old checkpoint for further training
-            print(dir_path)
             list_of_files = glob.glob(dir_path + "/*")
             latest_file = max(list_of_files, key=os.path.getctime)
             filename = latest_file
-            print(filename)
-            model, optimizer, start_epoch, val_auc_list = load_checkpoint(model, optimizer, val_auc_list, filename)
+            model, optimizer, loss, start_epoch, val_auc_list = load_checkpoint(model, optimizer, val_auc_list, filename)
             # now individually transfer the optimizer parts...
             for state in optimizer.state.values():
                 for k, v in state.items():
                     if isinstance(v, torch.Tensor):
                         state[k] = v.to(device)
             model.to(device)
-    
+        else:
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path)
+        
+        # use Learning rate decay 
+        if milestone_count > 0:
+            milestones = []
+            for i in range(len(milestone_count)):
+                milestones.append(len(train_loader)/milestone_count*i)
+            optimizer = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=decayLr)
+
+        # start training
         for epoch in trange(start_epoch, num_epoch):
-            train(model, optimizer, criterion, train_loader, device, task)
-            epoch_return, auc_return = val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, optimizer)
+            optimizer, loss = train(model, optimizer, criterion, train_loader, device, task)
+            epoch_return, auc_return = val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, optimizer, loss)
             if auc_return > auc_old:
                 epoch_old = epoch_return
                 auc_old = auc_return
@@ -220,9 +231,15 @@ def main(dataset_name,
     elif task_input == "MTSS":
         print("training multiple teachers and combine outputs")
 
-    else:
+    elif task_input == "Pseudolabel":
         print("creating pseudo labels for unlabeled dataset")
-
+        os.chdir(os.path.join(output_root, dataset_name))
+        restore_model_path = glob.glob("*.pth")[0]
+        model, optimizer, loss, start_epoch, val_auc_list = load_checkpoint(model, optimizer, val_auc_list, restore_model_path)
+        
+        createPseudoLabel(model, train_loader_unused_data, device, task, output_root=None)
+    else:
+        print("task not found!")
         
 
 

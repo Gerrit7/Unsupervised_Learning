@@ -18,6 +18,21 @@ def sel():
     
 def sel_task():
     selection_task = "You selected the task " + str(var_task.get())
+    # if var_task.get() == "Pseudolabel":
+    #     e1.config(state="disabled")
+    #     e2_var.set(1)
+    #     e2.config(state="disabled") 
+    #     e3.config(state="disabled")
+    #     e4.config(state="disabled")
+    #     e6.config(state="disabled")
+
+    # else:
+    #     e1.config(state='normal')
+    #     e2.config(state='normal')
+    #     e2_var.set(8)
+    #     e3.config(state='normal')
+    #     e4.config(state='normal')
+    #     e6.config(state='normal')
     #label_model.config(text = selection_task)
 
 def sel_optimizer():
@@ -59,6 +74,10 @@ def submit():
     task = var_task.get()
     global optimizer
     optimizer = var_optimizer.get()
+    global decayLr
+    decayLr = var_decayLr.get()
+    global milestones
+    milestones = var_milestone.get()
     global lossfun
     lossfun = var_lossfun.get()
     
@@ -103,6 +122,8 @@ def submit():
              var_switch,
              task,
              optimizer,
+             decayLr,
+             milestones,
              lossfun,
              augmentations,
              True)
@@ -311,6 +332,8 @@ Label(root, text = "Parameters", bd=1, relief="solid", width = 56, height = 2).g
 Label(root, text="Epochs").grid(row=8 ,column = 4, padx='5', pady='5',sticky='ew')
 Label(root, text="Batch Size").grid(row=9 ,column = 4, padx='5', pady='5',sticky='ew')
 Label(root, text="Learning Rate").grid(row=10 ,column = 4, padx='5', pady='5',sticky='ew')
+Label(root, text="Decay Learning Rate").grid(row=11 ,column = 4, padx='5', pady='5',sticky='ew')
+Label(root, text="Milestone Count").grid(row=12 ,column = 4, padx='5', pady='5',sticky='ew')
 Label(root, text="Momentum").grid(row=8 ,column = 6, padx='5', pady='5',sticky='ew')
 Label(root, text="% of trainset").grid(row=9 ,column = 6, padx='5', pady='5',sticky='ew')
 Label(root, text="Weight Decay").grid(row=10 ,column = 6, padx='5', pady='5',sticky='ew')
@@ -318,31 +341,45 @@ Label(root, text="Weight Decay").grid(row=10 ,column = 6, padx='5', pady='5',sti
 e1_var = IntVar()
 e2_var = IntVar()
 e3_var = DoubleVar() 
+var_decayLr = DoubleVar()
+var_milestone = IntVar()
 e4_var = DoubleVar() 
 e5_var = IntVar()
 e6_var = DoubleVar() 
 
 
-e1 = Entry(root,textvariable=e1_var).grid(row=8 ,column = 5, padx='5', pady='5',sticky='ew')
-e2 = Entry(root,textvariable=e2_var).grid(row=9 ,column = 5, padx='5', pady='5',sticky='ew')
-e3 = Entry(root,textvariable=e3_var).grid(row=10 ,column = 5, padx='5', pady='5',sticky='ew')
-e4 = Entry(root,textvariable=e4_var).grid(row=8 ,column = 7, padx='5', pady='5',sticky='ew')
-e5 = Entry(root,textvariable=e5_var).grid(row=9 ,column = 7, padx='5', pady='5',sticky='ew')
-e6 = Entry(root,textvariable=e6_var).grid(row=10 ,column = 7, padx='5', pady='5',sticky='ew')
+e1 = Entry(root,textvariable=e1_var)
+e1.grid(row=8 ,column = 5, padx='5', pady='5',sticky='ew')
+e2 = Entry(root,textvariable=e2_var)
+e2.grid(row=9 ,column = 5, padx='5', pady='5',sticky='ew')
+e3 = Entry(root,textvariable=e3_var)
+e3.grid(row=10 ,column = 5, padx='5', pady='5',sticky='ew')
+e7 = Entry(root,textvariable=var_decayLr)
+e7.grid(row=11 ,column = 5, padx='5', pady='5',sticky='ew')
+e8 = Entry(root,textvariable=var_milestone)
+e8.grid(row=12 ,column = 5, padx='5', pady='5',sticky='ew')
+e4 = Entry(root,textvariable=e4_var)
+e4.grid(row=8 ,column = 7, padx='5', pady='5',sticky='ew')
+e5 = Entry(root,textvariable=e5_var)
+e5.grid(row=9 ,column = 7, padx='5', pady='5',sticky='ew')
+e6 = Entry(root,textvariable=e6_var)
+e6.grid(row=10 ,column = 7, padx='5', pady='5',sticky='ew')
 
 
 # submit button for starting the main function
 SubmitButton = Button(root, text="Submit", command=submit)
-SubmitButton.grid(row=12 ,column = 5, columnspan=2, padx='5', pady='5',sticky='ew')
+SubmitButton.grid(row=14 ,column = 5, columnspan=2, padx='5', pady='5',sticky='ew')
 
 #Setting Defaults
 data_root.set("/DataSets/medmnist")
-data_root_complete.set("/Users/gerrit/Documents/Master-Thesis/DataSets/medmnist")
+data_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/DataSets/medmnist")
 output_root.set("/Master-Thesis/TrainedNets/")
-output_root_complete.set("/Users/gerrit/Documents/Master-Thesis/TrainedNets/")
+output_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/TrainedNets")
 e1_var.set(100)
 e2_var.set(8)
 e3_var.set(0.001)
+var_decayLr.set(0.1)
+var_milestone.set(0)
 e4_var.set(0.9)
 e5_var.set(100)
 e6_var.set(0)

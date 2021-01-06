@@ -2,6 +2,8 @@ import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms    
 import os
+import numpy as np
+import random
 
 from datasets.medmnist.dataset import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIST, PneumoniaMNIST, RetinaMNIST, \
     BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
@@ -23,12 +25,9 @@ def prepareMedmnist(flag, input_root, output_root, net_input, image_size, augmen
     DataClass = flag_to_class[flag]
 
     train_dataset_scaled = []
+    train_dataset_unused = []
     transforms.CenterCrop
     flag = flag + "_" + str(trainSize)
-
-    dir_path = os.path.join(output_root, '%s_checkpoints' % (flag))
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
 
 
     aug_values = {
@@ -77,10 +76,7 @@ def prepareMedmnist(flag, input_root, output_root, net_input, image_size, augmen
     print('==> Preparing data...')
     
     train_transform = transforms.Compose(tranform_compose_list)
-    print(train_transform)
-    print(type(train_transform))
     val_transform = transforms.Compose(tranform_compose_list)
-
     test_transform = transforms.Compose(tranform_compose_list)
 
     
@@ -89,14 +85,29 @@ def prepareMedmnist(flag, input_root, output_root, net_input, image_size, augmen
                                     transform=train_transform,
                                     download=download)
 
-    indices = torch.randperm(len(train_dataset))[:round(len(train_dataset)*trainSize)]
-    for idx in indices:
-        train_dataset_scaled.append(train_dataset[idx])
+    # indices = torch.randperm(len(train_dataset))[:round(len(train_dataset)*trainSize)]
+    # for idx in range(len(train_dataset)):
+    #     if idx in indices:
+    #         train_dataset_scaled.append(train_dataset[idx])
+    #     else:
+    #         train_dataset_unused.append(train_dataset[idx])
+
+    train_dataset_scaled, train_dataset_unused = torch.utils.data.random_split(train_dataset,[int(len(train_dataset)*trainSize), int(len(train_dataset)*(1-trainSize))])
+
+
 
     train_loader = data.DataLoader(dataset=train_dataset_scaled,
                                    batch_size=batch_size,
                                    shuffle=True,
                                    drop_last=True)
+    if train_dataset_unused > 0:
+        train_loader_unused_data = data.DataLoader(dataset=train_dataset_unused,
+                                        batch_size=batch_size,
+                                        shuffle=True,
+                                        drop_last=True)
+    else:
+        train_loader_unused_data = 0
+        
     val_dataset = DataClass(root=input_root,
                                   split='val',
                                   transform=val_transform,
@@ -115,63 +126,5 @@ def prepareMedmnist(flag, input_root, output_root, net_input, image_size, augmen
                                   drop_last=True)
     print('Train: ', len(train_dataset_scaled), ', Valid: ', len(val_dataset), ', Test: ', len(test_dataset))
     
-    return train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader
-    
-
-    val_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Resize(image_size),
-        transforms.CenterCrop(aug_values["CenterCrop"]["size"]),
-        transforms.ColorJitter(brightness=aug_values["ColorJitter"]["brightness"], contrast=aug_values["ColorJitter"]["contrast"],
-                            saturation=aug_values["ColorJitter"]["saturation"], hue=aug_values["ColorJitter"]["hue"]),
-        transforms.GaussianBlur(kernel_size=aug_values["GaussianBlur"]["kernel"], sigma=aug_values["GaussianBlur"]["sigma"]),
-        transforms.Normalize(mean=aug_values["Normalize"]["mean"], std=aug_values["Normalize"]["std"]),
-        transforms.RandomHorizontalFlip(p=aug_values["RandomHorizontalFlip"]["probability"]),
-        transforms.RandomVerticalFlip(p=aug_values["RandomVerticalFlip"]["probability"]),
-        transforms.RandomRotation(degrees=aug_values["RandomRotation"]["degrees"])
-    ])
-
-    test_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Resize(image_size),
-        transforms.CenterCrop(aug_values["CenterCrop"]["size"]),
-        transforms.ColorJitter(brightness=aug_values["ColorJitter"]["brightness"], contrast=aug_values["ColorJitter"]["contrast"],
-                            saturation=aug_values["ColorJitter"]["saturation"], hue=aug_values["ColorJitter"]["hue"]),
-        transforms.GaussianBlur(kernel_size=aug_values["GaussianBlur"]["kernel"], sigma=aug_values["GaussianBlur"]["sigma"]),
-        transforms.Normalize(mean=aug_values["Normalize"]["mean"], std=aug_values["Normalize"]["std"]),
-        transforms.RandomHorizontalFlip(p=aug_values["RandomHorizontalFlip"]["probability"]),
-        transforms.RandomVerticalFlip(p=aug_values["RandomVerticalFlip"]["probability"]),
-        transforms.RandomRotation(degrees=aug_values["RandomRotation"]["degrees"])
-    ])
-
-    
-    train_dataset = DataClass(root=input_root,
-                                    split='train',
-                                    transform=train_transform,
-                                    download=download)
-
-    indices = torch.randperm(len(train_dataset))[:round(len(train_dataset)*trainSize)]
-    for idx in indices:
-        train_dataset_scaled.append(train_dataset[idx])
-
-    train_loader = data.DataLoader(dataset=train_dataset_scaled,
-                                   batch_size=batch_size,
-                                   shuffle=True)
-    val_dataset = DataClass(root=input_root,
-                                  split='val',
-                                  transform=val_transform,
-                                  download=download)
-    val_loader = data.DataLoader(dataset=val_dataset,
-                                 batch_size=batch_size,
-                                 shuffle=True)
-    test_dataset = DataClass(root=input_root,
-                                   split='test',
-                                   transform=test_transform,
-                                   download=download)
-    test_loader = data.DataLoader(dataset=test_dataset,
-                                  batch_size=batch_size,
-                                  shuffle=True)
-    print('Train: ', len(train_dataset_scaled), ', Valid: ', len(val_dataset), ', Test: ', len(test_dataset))
-    
-    return train_dataset, train_loader, val_dataset, val_loader, test_dataset, test_loader
+    return train_loader, train_loader_unused_data, val_loader, test_loader
     

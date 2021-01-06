@@ -32,9 +32,11 @@ def train(model, optimizer, criterion, train_loader, device, task):
 
         loss.backward()
         optimizer.step()
+    
+    return optimizer, loss
 
 
-def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, optimizer):
+def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, optimizer, loss):
     ''' validation function
     :param model: the model to validate
     :param val_loader: DataLoader of validation set
@@ -75,6 +77,8 @@ def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old,
         'net': model.state_dict(),
         'auc': auc,
         'epoch': epoch,
+        'optimizer': optimizer,
+        'loss': loss
     }
     
     if auc > auc_old:
@@ -190,44 +194,6 @@ def getACC(y_true, y_score, task, threshold=0.5):
             y_pre[i] = np.argmax(y_score[i])
         return accuracy_score(y_true, y_pre)
 
-def createPseudoLabel(model, split, data_loader, device, flag, task, output_root=None):
-    ''' testing function
-    :param model: the model to test
-    :param split: the data to test, 'train/val/test'
-    :param data_loader: DataLoader of data
-    :param device: cpu or cuda
-    :param flag: subset name
-    :param task: task of current dataset, binary-class/multi-class/multi-label, binary-class
-
-    '''
-    model.eval()
-    pseudo_set = torch.tensor([]).to(device)
-
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(data_loader):
-            outputs = model(inputs.to(device))
-
-            if task == 'multi-label, binary-class':
-                targets = targets.to(torch.float32).to(device)
-                m = nn.Sigmoid()
-                outputs = m(outputs).to(device)
-            else:
-                targets = targets.squeeze().long().to(device)
-                m = nn.Softmax(dim=1)
-                outputs = m(outputs).to(device)
-                targets = targets.float().resize_(len(targets), 1)
-
-            pseudo_set = torch.cat((pseudo_set, targets), 0)
-            print(pseudo_set)
-        pseudo_set = pseudo_set.cpu().numpy()
-
-        if output_root is not None:
-            output_dir = os.path.join(output_root, flag)
-            if not os.path.exists(output_dir):
-                os.mkdir(output_dir)
-            output_path = os.path.join(output_dir, '%s.csv' % (split))
-            save_results(pseudo_set, output_path)
-
 
 def save_results(y_true, y_score, outputpath):
     '''Save ground truth and scores
@@ -259,6 +225,8 @@ def save_results(y_true, y_score, outputpath):
 
     df.to_csv(outputpath, sep=',', index=False, header=True, encoding="utf_8_sig")
 
+
+
 def load_checkpoint(model, optimizer, val_auc_list, filename='checkpoint.pth.tar'):
     # Note: Input model & optimizer should be pre-defined.  This routine only updates their states.
     start_epoch = 0
@@ -266,11 +234,13 @@ def load_checkpoint(model, optimizer, val_auc_list, filename='checkpoint.pth.tar
         print("=> loading checkpoint '{}'".format(filename))
         checkpoint = torch.load(filename)
         print("loading epoch")
-        start_epoch = checkpoint['epoch']
+        start_epoch = checkpoint['epoch']+1
         print("loading model")
         model.load_state_dict(checkpoint['net'])
         print("loading optimizer")
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        optimizer = checkpoint['optimizer']
+        print("loading loss")
+        loss = checkpoint['loss']
         print("loading auc_list")
         val_auc_list = checkpoint['auc']
         print("=> loaded checkpoint '{}' (epoch {})"
@@ -278,4 +248,41 @@ def load_checkpoint(model, optimizer, val_auc_list, filename='checkpoint.pth.tar
     else:
         print("=> no checkpoint found at '{}'".format(filename))
 
-    return model, optimizer, start_epoch, val_auc_list
+    return model, optimizer, loss, start_epoch, val_auc_list
+
+
+def createPseudoLabel(model, data_loader, device, task, output_root=None):
+    ''' pseudo labeling function
+    :param model: the model to test
+    :param data_loader: DataLoader of data
+    :param device: cpu or cuda
+    :param task: task of current dataset, binary-class/multi-class/multi-label, binary-class
+
+    '''
+    model.eval()
+    y_true = torch.tensor([]).to(device)
+    y_score = torch.tensor([]).to(device)
+
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(data_loader):
+            for single_input, single_target in zip(inputs, targets):
+                output = model(torch.unsqueeze(single_input.to(device),0))
+
+                if task == 'multi-label, binary-class':
+                    m = nn.Sigmoid()
+                    output = m(output).to(device)
+                else:
+                    m = nn.Softmax(dim=1)
+                    output = m(output).to(device)
+                    
+                
+                #pseudolabeled_data = (single_input, output.index(max(output)), single_target)
+                pseudolabeled_data = (output.max(), output.argmax(), single_target)
+                
+                #if output.max() > 0.7:
+
+        
+                
+        #auc = getAUC(y_true, y_score, task)
+        #acc = getACC(y_true, y_score, task)
+        #print('AUC: %.5f ACC: %.5f' % (auc, acc))
