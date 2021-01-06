@@ -100,14 +100,14 @@ def prepareMedmnist(flag, input_root, output_root, net_input, image_size, augmen
                                    batch_size=batch_size,
                                    shuffle=True,
                                    drop_last=True)
-    if train_dataset_unused > 0:
+    if len(train_dataset_unused) > 0:
         train_loader_unused_data = data.DataLoader(dataset=train_dataset_unused,
                                         batch_size=batch_size,
                                         shuffle=True,
                                         drop_last=True)
     else:
         train_loader_unused_data = 0
-        
+
     val_dataset = DataClass(root=input_root,
                                   split='val',
                                   transform=val_transform,

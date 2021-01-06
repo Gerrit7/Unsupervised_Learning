@@ -1,11 +1,14 @@
 import torch
 import torch.nn as nn
 import os
+import torch.nn.functional as F
 
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 import numpy as np
 import pandas as pd
+
+import AverageMeter
 
 def train(model, optimizer, criterion, train_loader, device, task):
     ''' training function
@@ -35,6 +38,55 @@ def train(model, optimizer, criterion, train_loader, device, task):
     
     return optimizer, loss
 
+def loss_soft_reg_ep(preds, labels, soft_labels, device, num_classes):
+    prob = F.softmax(preds, dim=1)
+    prob_avg = torch.mean(prob, dim=0)
+    p = torch.ones(num_classes).to(device) / num_classes
+
+    L_c = -torch.mean(torch.sum(soft_labels * F.log_softmax(preds, dim=1), dim=1))   # Soft labels
+    L_p = -torch.sum(torch.log(prob_avg) * p)
+    L_e = -torch.mean(torch.sum(prob * F.log_softmax(preds, dim=1), dim=1))
+
+    loss = L_c + 0.8 * L_p + 0.4* L_e
+    return prob, loss
+
+def train_CrossEntropy(model, optimizer, train_loader, epoch, num_classes, device, unlabeled_indexes):
+    train_loss = AverageMeter()
+    top1 = AverageMeter()
+    top5 = AverageMeter()
+    counter = 1
+    results = np.zeros((len(train_loader.dataset), num_classes), dtype=np.float32)
+    for imgs, img_pslab, labels, soft_labels, index in train_loader:
+        images, images_pslab, labels, soft_labels = imgs.to(device), img_pslab.to(device), labels.to(device), soft_labels.to(device)
+
+        # compute output
+        outputs = model(images)
+
+        prob, loss = loss_soft_reg_ep(outputs, labels, soft_labels, device, num_classes)
+
+        results[index.detach().numpy().tolist()] = prob.cpu().detach().numpy().tolist()
+
+        prec1, prec5 = accuracy_v2(outputs, labels, top=[1, 1])
+        train_loss.update(loss.item(), images.size(0))
+        top1.update(prec1.item(), images.size(0))
+        top5.update(prec5.item(), images.size(0))
+
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if counter % 15 == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}, Accuracy: {:.0f}%, Learning rate: {:.6f}'.format(
+                epoch, counter * len(images), len(train_loader.dataset),
+                        100. * counter / len(train_loader), loss.item(),
+                        prec1, optimizer.param_groups[0]['lr']))
+        counter = counter + 1
+
+        # update soft labels
+        train_loader.dataset.update_labels(results, unlabeled_indexes)
+
+    return train_loss.avg, top5.avg, top1.avg
 
 def val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, optimizer, loss):
     ''' validation function
@@ -194,6 +246,21 @@ def getACC(y_true, y_score, task, threshold=0.5):
             y_pre[i] = np.argmax(y_score[i])
         return accuracy_score(y_true, y_pre)
 
+def accuracy_v2(preds, labels, top=[1,5]):
+    """Compute the precision@k for the specified values of k"""
+    result = []
+    maxk = max(top)
+    batch_size = preds.size(0)
+
+    _, pred = preds.topk(maxk, 1, True, True)
+    pred = pred.t() # pred[k-1] stores the k-th predicted label for all samples in the batch.
+    correct = pred.eq(labels.view(1,-1).expand_as(pred))
+
+    for k in top:
+        correct_k = correct[:k].view(-1).float().sum(0)
+        result.append(correct_k.mul_(100.0 / batch_size))
+
+    return result
 
 def save_results(y_true, y_score, outputpath):
     '''Save ground truth and scores

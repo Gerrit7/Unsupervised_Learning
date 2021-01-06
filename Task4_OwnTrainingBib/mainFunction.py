@@ -40,22 +40,40 @@ def main(dataset_name,
          augmentations,
          download):
     
-    # print(dataset_name)
-    # print(data_root)
-    # print(output_root)
-    # print(num_epoch)
-    # print(batch_size)
-    # print(learning_rate)
-    # print(momentum)
-    # print(train_size)
-    # print(weight_decay)
-    # print(net_input)
-    # print(mode)
-    # print(task_input)
-    # print(optimizer)
-    # print(augmentations)
-    # print(download)
+    print('Dataset Name: ', dataset_name)
+    print('Dataset root: ', data_root)
+    print('Output root: ', output_root)
+    print('Number of epochs: ', num_epoch)
+    print('Batch Size: ', batch_size)
+    print('Learning Rate: ', learning_rate)
+    print('Momentum: ', momentum)
+    print('Train Size: ', train_size)
+    print('Weight Decay: ', weight_decay)
+    print('Used Net Architecture: ', net_input)
+    print('Used Mode: ', mode)
+    print('Used Task: ', task_input)
+    print('Used Optimizer: ', optimizer)
+    print('Selected Augmentations: ', augmentations)
+    print('Download: ', download)
     
+    inputs = {
+        'dataset': dataset_name,
+        'data_root': data_root,
+        'output_root':output_root,
+        'num_epochs': num_epoch,
+        'batch_size': batch_size,
+        'lr': learning_rate,
+        'momentum': momentum,
+        'train_size': train_size,
+        'weight_decay': weight_decay,
+        'net_input': net_input,
+        'mode': mode,
+        'task': task_input,
+        'optimizer': optimizer,
+        'augs': augmentations,
+        'download': download
+    }
+
     start_epoch = 0
     # Setting information depending on selected dataset 
     if dataset_name != 'cifar10':
@@ -171,6 +189,13 @@ def main(dataset_name,
         print("undefined optimizer: taking default SGD")
         optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
     
+    # using learning rate decay
+    milestones = []
+    for i in range(milestone_count):
+        milestones.append(len(train_loader)/milestone_count*i)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=decayLr)
+
+
     if task_input == "BaseLine":
         print("creating Baseline-Training")
         # check wheather a training session has already startet for this dataset
@@ -189,16 +214,11 @@ def main(dataset_name,
         else:
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
-        
-        # use Learning rate decay 
-        if milestone_count > 0:
-            milestones = []
-            for i in range(len(milestone_count)):
-                milestones.append(len(train_loader)/milestone_count*i)
-            optimizer = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=decayLr)
 
         # start training
         for epoch in trange(start_epoch, num_epoch):
+            scheduler.step()
+            print(scheduler.get_last_lr())
             optimizer, loss = train(model, optimizer, criterion, train_loader, device, task)
             epoch_return, auc_return = val(model, val_loader, device, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, optimizer, loss)
             if auc_return > auc_old:
