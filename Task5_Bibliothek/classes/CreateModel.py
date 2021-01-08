@@ -57,7 +57,7 @@ class CreateModel():
 
         return model, image_size
 
-    def load_checkpoint(self, filename='checkpoint.pth.tar'):
+    def load_checkpoint(self, model, optimizer, filename='checkpoint.pth.tar'):
         # Note: Input model & optimizer should be pre-defined.  This routine only updates their states.
         start_epoch = 0
         if os.path.isfile(filename):
@@ -66,14 +66,13 @@ class CreateModel():
             print("loading epoch")
             start_epoch = checkpoint['epoch']+1
             print("loading model")
-            ######## nachgucken!!!!!!
-            #model = checkpoint.load_state_dict(checkpoint['net'])
+            model.load_state_dict(checkpoint['net'])
             print("loading optimizer")
-            optimizer = checkpoint['optimizer']
+            optimizer.load_state_dict(checkpoint['optimizer'])
             print("loading loss")
             loss = checkpoint['loss']
             print("loading auc_list")
-            val_auc_list = checkpoint['auc']
+            val_auc_list = checkpoint['auc_list']
             print("=> loaded checkpoint '{}' (epoch {})"
                     .format(filename, checkpoint['epoch']))
         else:

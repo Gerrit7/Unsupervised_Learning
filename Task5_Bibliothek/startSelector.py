@@ -381,9 +381,9 @@ SubmitButton.grid(row=14 ,column = 5, columnspan=2, padx='5', pady='5',sticky='e
 
 #Setting Defaults
 data_root.set("/DataSets/medmnist")
-data_root_complete.set("/Users/gerrit/Documents/Master-Thesis/DataSets/medmnist")
+data_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/DataSets/medmnist")
 output_root.set("/Master-Thesis/TrainedNets/")
-output_root_complete.set("/Users/gerrit/Documents/Master-Thesis/TrainedNets")
+output_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/TrainedNets")
 e1_var.set(100)
 e2_var.set(8)
 e3_var.set(0.001)

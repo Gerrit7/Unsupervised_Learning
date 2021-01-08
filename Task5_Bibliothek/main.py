@@ -3,14 +3,20 @@ import os
 import shutil
 from shutil import copyfile
 
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score
+import numpy as np
+import pandas as pd
 import math
 import numpy as np
 import torch
+from torch.nn import functional as F
+import torch.nn as nn
 from tqdm import trange
 
 
 from classes.CreateModel import CreateModel, LossFunction, Optimizer
-from classes.Operations import SupervisedLearning
+from classes.Operations import train_labeled, val_labeled, test_labeled, PseudoLabels
 from classes.PrepareData import PrepareData
 from classes.PseudoLabel import PseudoLabel
 from medmnist.info import INFO
@@ -29,7 +35,7 @@ def main(dataset_name,
          count_students,
          mode,
          task_input,
-         optimizer,
+         optimizer_input,
          decayLr,
          milestone_count,
          loss_function,
@@ -49,7 +55,7 @@ def main(dataset_name,
         'net_input': net_input,
         'mode': mode,
         'task': task_input,
-        'optimizer': optimizer,
+        'optimizer': optimizer_input,
         'augs': augmentations,
         'download': download
     }
@@ -133,16 +139,17 @@ def main(dataset_name,
         
         model, image_size = net_create.createNewCNN(net_input)
         criterion = teacherlossfun.createLossFunction(loss_function)
-        teacher_optimizer = teacheroptimizer.createOptimizer(optimizer,model, momentum, weight_decay, learning_rate)
-        scheduler = teacheroptimizer.createScheduler(teacher_optimizer, len(train_loader_labeled), milestone_count, decayLr)
+        optimizer = teacheroptimizer.createOptimizer(optimizer_input,model, momentum, weight_decay, learning_rate)
+        scheduler = teacheroptimizer.createScheduler(optimizer, len(train_loader_labeled), milestone_count, decayLr)
 
         # check wheather a training session has already startet for this dataset
         if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
             list_of_files = glob.glob(dir_path + "/*")
             latest_file = max(list_of_files, key=os.path.getctime)
             filename = latest_file
-            model, teacher_optimizer, loss, start_epoch, val_auc_list = net_create.load_checkpoint(filename)
-            
+            model, optimizer, loss, start_epoch, val_auc_list = net_create.load_checkpoint(model, optimizer, filename)
+            epoch_old = start_epoch-1
+            auc_old = val_auc_list[-1]
         else:
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
@@ -154,38 +161,45 @@ def main(dataset_name,
                     state[k] = v.to(device)
         model.to(device)
 
-        # create Operations instance
-        supervisedlearning = SupervisedLearning(model, teacher_optimizer, scheduler, criterion, device)
-        
 
         # start training
         for epoch in trange(start_epoch, num_epoch):
-            teacher_optimizer, loss = supervisedlearning.train_labeled(train_loader_labeled, task)
-            epoch_return, auc_return = supervisedlearning.val_labeled(val_loader_labeled, val_auc_list, task, dir_path, epoch, auc_old, epoch_old, loss)
+            model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
+            epoch_return, auc_return = val_labeled(dataset_name, model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, dir_path, epoch, auc_old, epoch_old, loss, device)
+
+            #train(model, optimizer, criterion, train_loader_labeled, device, task)
+            #val(model, val_loader_labeled, device, val_auc_list, task, dir_path, epoch)
+            scheduler.step()
+
             if auc_return > auc_old:
                 epoch_old = epoch_return
                 auc_old = auc_return
-            scheduler.step()
             
+
         auc_list = np.array(val_auc_list)
         index = auc_list.argmax()
         print('epoch %s is the best model' % (index))
+        
 
         #*************************** Evaluate trained Model **************************************
         print('==> Testing model...')
-        restore_model_path = os.path.join(
-            dir_path, 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
-
+        # restore_model_path = os.path.join(
+        #     dir_path, 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
+        restore_model_path = os.path.join(dir_path,'training_'+ dataset_name)
+        
         model.load_state_dict(torch.load(restore_model_path)['net'])
-        supervisedlearning.test_labeled('train', train_loader_labeled, dataset_name, task, output_root=output_root)
-        supervisedlearning.test_labeled('val', val_loader_labeled, dataset_name, task, output_root=output_root)
-        supervisedlearning.test_labeled('test', test_loader_labeled, dataset_name, task, output_root=output_root)
+        test_labeled('train', model, train_loader_labeled, dataset_name, task, device, output_root=output_root)
+        test_labeled('val', model, val_loader_labeled, dataset_name, task, device, output_root=output_root)
+        test_labeled('test', model, test_loader_labeled, dataset_name, task, device, output_root=output_root)
             
         save_best_model_path = os.path.join( 
             os.path.join(output_root, dataset_name), 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
         copyfile(restore_model_path, save_best_model_path)
         shutil.rmtree(dir_path)
 
+    
+    
+    
     elif task_input == "NoisyStudent":
         print("==> NoisyStudent-Training...")
 
@@ -195,7 +209,7 @@ def main(dataset_name,
     elif task_input == "Pseudolabel":
         print("==> Pseudolabel-Training...")
 
-        # ****************************************** create student nets ******************************************************+***
+    # ****************************************** create student nets ******************************************************+***
         # *********** seperate unlabled dataset into student count sets ********
         size_train_dataset = len(train_dataset_unlabeled)
         for i in range(count_students):
@@ -203,38 +217,66 @@ def main(dataset_name,
             vars()["studentnet_loader_" + str(i)] = prepareClass.createDataLoader(vars()["studentnet_dataset_" + str(i)], batch_size)
             #print("studentnet_dataset_", str(i), ": ", len(vars()["studentnet_dataset_" + str(i)]))
 
-
-        for net in range(count_students):
             # ******************** create net architectures ********************
-            vars()["nt_create" + str(net)] = CreateModel(vars()["studentnet_dataset_" + str(i)], n_channels, n_classes, device)
-            vars()["studentnet_" + str(net)], vars()["image_size" + str(net)] = net_create.createNewCNN(net_input)
+            vars()["net_create" + str(i)] = CreateModel(vars()["studentnet_dataset_" + str(i)], n_channels, n_classes, device)
+            vars()["studentnet_" + str(i)], vars()["image_size" + str(i)] = vars()["net_create" + str(i)].createNewCNN(net_input)
             
             # ******************** create loss function ************************
-            vars()["lossfun" + str(net)] = LossFunction()
-            vars()["criterion" + str(net)] = teacherlossfun.createLossFunction(loss_function)
+            vars()["lossfun" + str(i)] = LossFunction()
+            vars()["criterion" + str(i)] = vars()["lossfun" + str(i)].createLossFunction(loss_function)
             
             # ******************** create optimizer ****************************
-            vars()["student_optimizer" + str(net)] = Optimizer()
-            vars()["optimizer" + str(net)] = teacheroptimizer.createOptimizer(optimizer,vars()["studentnet_" + str(net)], momentum, weight_decay, learning_rate)
-            vars()["scheduler" + str(net)] = teacheroptimizer.createScheduler(vars()["optimizer" + str(net)], len(train_loader_labeled), milestone_count, decayLr)
-
+            vars()["student_optimizer" + str(i)] = Optimizer()
+            vars()["optimizer" + str(i)] = vars()["student_optimizer" + str(i)].createOptimizer(optimizer_input,vars()["studentnet_" + str(i)], momentum, weight_decay, learning_rate)
+            vars()["scheduler" + str(i)] = vars()["student_optimizer" + str(i)].createScheduler(vars()["optimizer" + str(i)], len(train_loader_labeled), milestone_count, decayLr)
+        
+    # ****************************************** create teacher net ******************************************************+***
         # check wheather a net for this dataset is available
+        teachermodel, image_size = net_create.createNewCNN(net_input)
+        teacher_optimizer = teacheroptimizer.createOptimizer(optimizer_input, teachermodel, momentum, weight_decay, learning_rate)
         model_dir = os.path.join(output_root, flag)
         if os.path.isdir(model_dir) and len(os.listdir(model_dir)) != 0:
             list_of_files = glob.glob(model_dir + "/*.pth")
             latest_file = max(list_of_files, key=os.path.getctime)
             filename = latest_file
-            teacher_model, teacher_optimizer, loss, start_epoch, val_auc_list = net_create.load_checkpoint(filename)
+            teachernet, teacher_optimizer, loss, start_epoch, val_auc_list = net_create.load_checkpoint(teachermodel, teacher_optimizer, filename)
         else:
             teachernet, image_size = net_create.createNewCNN(net_input)
             criterion = teacherlossfun.createLossFunction(loss_function)
-            teacher_optimizer = teacheroptimizer.createOptimizer(optimizer,teachernet, momentum, weight_decay, learning_rate)
+            teacher_optimizer = teacheroptimizer.createOptimizer(optimizer_input,teachernet, momentum, weight_decay, learning_rate)
             scheduler = teacheroptimizer.createScheduler(teacher_optimizer, len(train_loader_labeled), milestone_count, decayLr)
 
 
+        
+        # create Operations instance
+        pseudolabeling = PseudoLabels(device, n_classes, reg1=0.8, reg2=0.4)
+        
+        for i in range(count_students):
+            if i == 0:
+                teachernet.eval()
+                results = np.zeros((len(train_loader_labeled.dataset), 10), dtype=np.float32)
 
-    # ************************************** Testing *******************************************************
-    
+                for batch_idx, (inputs, targets) in enumerate(train_loader_labeled):
+                    inputs = inputs.to(device)
+                    print(len(inputs))
+                    outputs = teachernet(inputs)
+                    prob = F.softmax(outputs, dim=1)
+                    print(outputs)
+                    print(prob)
+            # else:
+            #     vars()["studentnet_" + str(i)].eval()
+            #     results = np.zeros((len(vars()["studentnet_loader_" + str(i)].dataset), 10), dtype=np.float32)
 
+            #     for batch_idx, (inputs, targets) in enumerate(vars()["studentnet_loader_" + str(i)]):
+            #         inputs = inputs.to(device)
+            #         print(len(inputs))
+            #         outputs = vars()["studentnet_" + str(i)](inputs)
+            #         prob = F.softmax(outputs, dim=1)
+            #         print(outputs)
+            #         print(prob)
+                    #prob, loss = pseudolabeling.loss_soft_reg_ep(outputs, soft_labels)
+                    #results[index.detach().numpy().tolist()] = prob.cpu().detach().numpy().tolist()
+
+                #vars()["studentnet_loader_" + str(i)].dataset.update_labels(results, unlabeled_indexes)
 
     

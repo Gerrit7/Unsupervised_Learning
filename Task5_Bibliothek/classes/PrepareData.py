@@ -100,6 +100,7 @@ class PrepareData:
     def createDataLoader(self, data_in, batch_size):
         data_loader = data.DataLoader(dataset=data_in,
                                     batch_size=batch_size,
-                                    shuffle=True)
+                                    shuffle=True,
+                                    drop_last= True)
 
         return data_loader
