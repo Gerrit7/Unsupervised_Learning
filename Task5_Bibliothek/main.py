@@ -156,7 +156,6 @@ def main(dataset_name,
                 epoch_old = epoch_return
                 auc_old = auc_return
             scheduler.step()
-            #print("epoch: ", epoch, ", old auc: ", auc_old, ", new auc: ", auc_return)
             
         auc_list = np.array(val_auc_list)
         index = auc_list.argmax()
