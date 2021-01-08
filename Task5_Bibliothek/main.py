@@ -195,29 +195,28 @@ def main(dataset_name,
     elif task_input == "Pseudolabel":
         print("==> Pseudolabel-Training...")
 
-        # create student nets
-        for net in range(count_students):
-            # ************************************** create net architectures **************************************
-            vars()["nt_create" + str(net)] = CreateModel(vars()["studentnet_dataset_" + str(i)], n_channels, n_classes, device)
-            vars()["studentnet_" + str(net)], vars()["image_size" + str(net)] = net_create.createNewCNN(net_input)
-            
-            # ************************************** create loss function ******************************************
-            vars()["lossfun" + str(net)] = LossFunction()
-            vars()["criterion" + str(net)] = teacherlossfun.createLossFunction(loss_function)
-            
-            # ************************************** create optimizer **********************************************
-            vars()["student_optimizer" + str(net)] = Optimizer()
-
-            
-            vars()["optimizer" + str(net)] = teacheroptimizer.createOptimizer(optimizer,vars()["studentnet_" + str(net)], momentum, weight_decay, learning_rate)
-            vars()["scheduler" + str(net)] = teacheroptimizer.createScheduler(vars()["optimizer" + str(net)], len(train_loader_labeled), milestone_count, decayLr)
-
-        # seperate unlabled dataset into student count sets
+        # ****************************************** create student nets ******************************************************+***
+        # *********** seperate unlabled dataset into student count sets ********
         size_train_dataset = len(train_dataset_unlabeled)
         for i in range(count_students):
             vars()["studentnet_dataset_" + str(i)], train_dataset_unlabeled = torch.utils.data.random_split(train_dataset_unlabeled,[int(math.ceil(len(train_dataset_unlabeled)*(1/(count_students-i)))), int(math.floor(len(train_dataset_unlabeled)*(1-(1/(count_students-i)))))])
             vars()["studentnet_loader_" + str(i)] = prepareClass.createDataLoader(vars()["studentnet_dataset_" + str(i)], batch_size)
             #print("studentnet_dataset_", str(i), ": ", len(vars()["studentnet_dataset_" + str(i)]))
+
+
+        for net in range(count_students):
+            # ******************** create net architectures ********************
+            vars()["nt_create" + str(net)] = CreateModel(vars()["studentnet_dataset_" + str(i)], n_channels, n_classes, device)
+            vars()["studentnet_" + str(net)], vars()["image_size" + str(net)] = net_create.createNewCNN(net_input)
+            
+            # ******************** create loss function ************************
+            vars()["lossfun" + str(net)] = LossFunction()
+            vars()["criterion" + str(net)] = teacherlossfun.createLossFunction(loss_function)
+            
+            # ******************** create optimizer ****************************
+            vars()["student_optimizer" + str(net)] = Optimizer()
+            vars()["optimizer" + str(net)] = teacheroptimizer.createOptimizer(optimizer,vars()["studentnet_" + str(net)], momentum, weight_decay, learning_rate)
+            vars()["scheduler" + str(net)] = teacheroptimizer.createScheduler(vars()["optimizer" + str(net)], len(train_loader_labeled), milestone_count, decayLr)
 
         # check wheather a net for this dataset is available
         model_dir = os.path.join(output_root, flag)
