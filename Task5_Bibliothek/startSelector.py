@@ -18,8 +18,10 @@ def sel():
     
 def sel_task():
     selection_task = "You selected the task " + str(var_task.get())
-    # if var_task.get() == "Pseudolabel":
-    #     e1.config(state="disabled")
+    if var_task.get() != "Pseudolabel":
+         e_count_stud.config(state="disabled")
+    else:
+        e_count_stud.config(state="normal")
     #     e2_var.set(1)
     #     e2.config(state="disabled") 
     #     e3.config(state="disabled")
@@ -70,6 +72,8 @@ def submit():
     augmentations = [c1_var.get(), c2_var.get(), c3_var.get(), c4_var.get(), c5_var.get(), c6_var.get(), c7_var.get()]
     global net_input
     net_input = var.get()
+    global count_students
+    count_students = var_count_stud.get()
     global task
     task = var_task.get()
     global optimizer
@@ -119,6 +123,7 @@ def submit():
              train_size,
              weight_decay,
              net_input,
+             count_students,
              var_switch,
              task,
              optimizer,
@@ -337,6 +342,8 @@ Label(root, text="Milestone Count").grid(row=12 ,column = 4, padx='5', pady='5',
 Label(root, text="Momentum").grid(row=8 ,column = 6, padx='5', pady='5',sticky='ew')
 Label(root, text="% of trainset").grid(row=9 ,column = 6, padx='5', pady='5',sticky='ew')
 Label(root, text="Weight Decay").grid(row=10 ,column = 6, padx='5', pady='5',sticky='ew')
+Label(root, text="Count of Student Nets").grid(row=11 ,column = 6, padx='5', pady='5',sticky='ew')
+
 
 e1_var = IntVar()
 e2_var = IntVar()
@@ -346,7 +353,7 @@ var_milestone = IntVar()
 e4_var = DoubleVar() 
 e5_var = IntVar()
 e6_var = DoubleVar() 
-
+var_count_stud = IntVar()
 
 e1 = Entry(root,textvariable=e1_var)
 e1.grid(row=8 ,column = 5, padx='5', pady='5',sticky='ew')
@@ -364,6 +371,8 @@ e5 = Entry(root,textvariable=e5_var)
 e5.grid(row=9 ,column = 7, padx='5', pady='5',sticky='ew')
 e6 = Entry(root,textvariable=e6_var)
 e6.grid(row=10 ,column = 7, padx='5', pady='5',sticky='ew')
+e_count_stud = Entry(root,textvariable=var_count_stud)
+e_count_stud.grid(row=11 ,column = 7, padx='5', pady='5',sticky='ew')
 
 
 # submit button for starting the main function
@@ -372,9 +381,9 @@ SubmitButton.grid(row=14 ,column = 5, columnspan=2, padx='5', pady='5',sticky='e
 
 #Setting Defaults
 data_root.set("/DataSets/medmnist")
-data_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/DataSets/medmnist")
+data_root_complete.set("/Users/gerrit/Documents/Master-Thesis/DataSets/medmnist")
 output_root.set("/Master-Thesis/TrainedNets/")
-output_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/TrainedNets")
+output_root_complete.set("/Users/gerrit/Documents/Master-Thesis/TrainedNets")
 e1_var.set(100)
 e2_var.set(8)
 e3_var.set(0.001)
@@ -383,6 +392,7 @@ var_milestone.set(0)
 e4_var.set(0.9)
 e5_var.set(100)
 e6_var.set(0)
+var_count_stud.set(0)
 
 root.mainloop()
 

@@ -57,7 +57,7 @@ class CreateModel():
 
         return model, image_size
 
-    def load_checkpoint(self, model, optimizer, val_auc_list, filename='checkpoint.pth.tar'):
+    def load_checkpoint(self, filename='checkpoint.pth.tar'):
         # Note: Input model & optimizer should be pre-defined.  This routine only updates their states.
         start_epoch = 0
         if os.path.isfile(filename):
@@ -66,7 +66,8 @@ class CreateModel():
             print("loading epoch")
             start_epoch = checkpoint['epoch']+1
             print("loading model")
-            model.load_state_dict(checkpoint['net'])
+            ######## nachgucken!!!!!!
+            #model = checkpoint.load_state_dict(checkpoint['net'])
             print("loading optimizer")
             optimizer = checkpoint['optimizer']
             print("loading loss")
@@ -90,7 +91,7 @@ class LossFunction():
         elif loss_function == "bce":
             criterion = nn.BCEWithLogitsLoss()
         elif loss_function == "MSE":
-            criterion == nn.MSELoss()
+            criterion = nn.MSELoss()
         elif loss_function == "MLE":
             print("actual not supported!")
         else:
@@ -119,6 +120,6 @@ class Optimizer():
         milestones = []
         for i in range(milestone_count):
             milestones.append(int(round(size_trainloader/milestone_count*i)))
-            print(milestones)
+            #print(milestones)
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=decayLr)
         return scheduler

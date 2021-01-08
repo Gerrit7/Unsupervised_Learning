@@ -68,7 +68,7 @@ class PrepareData:
         return transform
 
 
-    def createDataLoader(self, split, transform, batch_size, split_size):
+    def prepareDataSet(self, split, transform, split_size):
 
         flag_to_class = {
             "pathmnist": PathMNIST,
@@ -94,15 +94,12 @@ class PrepareData:
 
         data_labeled, data_unlabeled = torch.utils.data.random_split(dataset,[int(math.ceil(len(dataset)*split_size)), int(math.floor(len(dataset)*(1-split_size)))])
 
-        data_loader_labeled = data.DataLoader(dataset=data_labeled,
+        return data_labeled, data_unlabeled
+
+
+    def createDataLoader(self, data_in, batch_size):
+        data_loader = data.DataLoader(dataset=data_in,
                                     batch_size=batch_size,
                                     shuffle=True)
-        if len(data_unlabeled) > 0:
-            data_loader_unlabeled = data.DataLoader(dataset=data_unlabeled,
-                                            batch_size=batch_size,
-                                            shuffle=True)
-        else:
-            data_loader_unlabeled = 0
 
-        return data_loader_labeled, data_loader_unlabeled
-
+        return data_loader
