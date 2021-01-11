@@ -78,10 +78,10 @@ def val_labeled(dataset_name, model, optimizer, scheduler, val_loader, task, val
     path = os.path.join(dir_path, 'ckpt_%d_auc_%.5f.pth' % (epoch, auc))
     torch.save(state, path)
 
-    return (epoch, auc)
+    return epoch, auc
 
 
-def test_labeled(split, model, data_loader, flag, task, device, output_root=None):
+def test_labeled(split, model, data_loader, flag, split_size, task, device, output_root=None):
     ''' testing function
     :param model: the model to test
     :param split: the data to test, 'train/val/test'
@@ -120,7 +120,7 @@ def test_labeled(split, model, data_loader, flag, task, device, output_root=None
         print('%s AUC: %.5f ACC: %.5f' % (split, auc, acc))
 
         if output_root is not None:
-            output_dir = os.path.join(output_root, flag)
+            output_dir = os.path.join(output_root, flag + "_" + str(split_size))
             if not os.path.exists(output_dir):
                 os.mkdir(output_dir)
             output_path = os.path.join(output_dir, '%s.csv' % (split))
