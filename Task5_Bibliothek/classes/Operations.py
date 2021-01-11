@@ -57,9 +57,7 @@ def val_labeled(dataset_name, model, optimizer, scheduler, val_loader, task, val
         auc = getAUC(y_true, y_score, task)
         val_auc_list.append(auc)
     
-    if auc > auc_old:
-        print('auc is greater')
-    else:
+    if auc <= auc_old:
         if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
             list_of_files = glob.glob(dir_path + "/*")
             latest_file = max(list_of_files, key=os.path.getctime)
@@ -76,9 +74,8 @@ def val_labeled(dataset_name, model, optimizer, scheduler, val_loader, task, val
         'scheduler': scheduler.state_dict(),
         'loss': loss
     }
-    print(state['auc_list'])
-    print(state['epoch'])
-    path = os.path.join(dir_path,'training_'+ dataset_name)
+    
+    path = os.path.join(dir_path, 'ckpt_%d_auc_%.5f.pth' % (epoch, auc))
     torch.save(state, path)
 
     return (epoch, auc)

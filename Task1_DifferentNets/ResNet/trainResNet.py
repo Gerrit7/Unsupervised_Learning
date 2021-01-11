@@ -94,6 +94,9 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
     test_loader = data.DataLoader(dataset=test_dataset,
                                   batch_size=batch_size,
                                   shuffle=True)
+    print(len(train_loader))
+    print(len(val_loader))
+    print(len(test_loader))
     print('Train: ', len(train_dataset_scaled), ', Valid: ', len(val_dataset), ', Test: ', len(test_dataset))
     print('==> Building and training model...')
 

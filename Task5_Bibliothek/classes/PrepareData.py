@@ -93,17 +93,17 @@ class PrepareData:
                             download=self.download)
         indices_labeled = int(math.ceil(len(dataset)*split_size))
         indices_unlabeled = int(math.floor(len(dataset)*(1-split_size)))
+
         # changed random_split in torch.utils.data. dataset.py for returning indices
         [data_labeled, indices_labeled], [data_unlabeled, indices_unlabeled] = torch.utils.data.random_split(dataset,[indices_labeled, indices_unlabeled])
-
+        
         return dataset, data_labeled, indices_labeled, data_unlabeled, indices_unlabeled
 
 
 def createDataLoader(data_in, batch_size):
     data_loader = data.DataLoader(dataset=data_in,
                                 batch_size=batch_size,
-                                shuffle=True,
-                                drop_last= True)
+                                shuffle=True)
 
     return data_loader
 
