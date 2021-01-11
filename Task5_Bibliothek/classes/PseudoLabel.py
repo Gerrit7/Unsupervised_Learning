@@ -1,100 +1,105 @@
 import torch
-from torch.distributions.categorical import Categorical
 from torch.nn import functional as F
-
-from pathlib import Path
+import torch.nn as nn
+import os
+import glob
+import shutil
+import numpy as np
+from shutil import copyfile
+from tqdm import trange
+from classes.CreateModel import CreateModel, LossFunction, Optimizer
+from classes.PrepareData import createDataLoader
+from classes.Operations import train_labeled, val_labeled, test_labeled
 
 class PseudoLabel:
-
-    def __init__(self, model, optimizer, loss_fn, device, config, writer=None, save_dir=None, save_freq=5):
-        self.model = model
-        self.optimizer = optimizer
-        self.loss_fn = loss_fn
-        self.save_dir = save_dir
-        self.save_freq = save_freq
+    def __init__(self, inputs, device):
+        self.inputs = inputs
         self.device = device
-        self.writer = writer
-        self.labeled_bs = config.labeled_batch_size
-        self.global_step = 0
-        self.epoch = 0
-        self.T1, self.T2 = config.t1, config.t2
-        self.af = config.af
         
-    def _iteration(self, data_loader, print_freq, is_train=True):
-        loop_loss = []
-        accuracy = []
-        labeled_n = 0
-        mode = "train" if is_train else "test"
-        for batch_idx, (data, targets) in enumerate(data_loader):
-            self.global_step += batch_idx
-            data, targets = data.to(self.device), targets.to(self.device)
-            outputs = self.model(data)
-            if is_train:
-                labeled_bs = self.labeled_bs
-                labeled_loss = torch.sum(self.loss_fn(outputs, targets)) / labeled_bs
-                with torch.no_grad():
-                    pseudo_labeled = outputs.max(1)[1]
-                unlabeled_loss = torch.sum(targets.eq(-1).float() * self.loss_fn(outputs, pseudo_labeled)) / (data.size(0)-labeled_bs +1e-10)
-                loss = labeled_loss + self.unlabeled_weight()*unlabeled_loss
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-            else:
-                labeled_bs = data.size(0)
-                labeled_loss = unlabeled_loss = torch.Tensor([0])
-                loss = torch.mean(self.loss_fn(outputs, targets))
-            labeled_n += labeled_bs
+    def defineOperators(self, n_channels, n_classes, dir_path, data_loader):
+        # ************************************** create net architectures **************************************
+        net_create = CreateModel(self.inputs['dataset'], n_channels, n_classes, self.device)
 
-            loop_loss.append(loss.item() / len(data_loader))
-            acc = targets.eq(outputs.max(1)[1]).sum().item()
-            accuracy.append(acc)
-            if print_freq>0 and (batch_idx%print_freq)==0:
-                print(f"[{mode}]loss[{batch_idx:<3}]\t labeled loss: {labeled_loss.item():.3f}\t unlabeled loss: {unlabeled_loss.item():.3f}\t loss: {loss.item():.3f}\t Acc: {acc/labeled_bs:.3%}")
-            if self.writer:
-                self.writer.add_scalar(mode+'_global_loss', loss.item(), self.global_step)
-                self.writer.add_scalar(mode+'_global_accuracy', acc/labeled_bs, self.global_step)
-        print(f">>>[{mode}]loss\t loss: {sum(loop_loss):.3f}\t Acc: {sum(accuracy)/labeled_n:.3%}")
-        if self.writer:
-            self.writer.add_scalar(mode+'_epoch_loss', sum(loop_loss), self.epoch)
-            self.writer.add_scalar(mode+'_epoch_accuracy', sum(accuracy)/labeled_n, self.epoch)
-
-        return loop_loss, accuracy
-
-    def unlabeled_weight(self):
-        alpha = 0.0
-        if self.epoch > self.T1:
-            alpha = (self.epoch-self.T1) / (self.T2-self.T1)*self.af
-            if self.epoch > self.T2:
-                alpha = af
-        return alpha
+        # ************************************** create loss function ******************************************
+        Lossfun = LossFunction()
         
-    def train(self, data_loader, print_freq=20):
-        self.model.train()
-        with torch.enable_grad():
-            loss, correct = self._iteration(data_loader, print_freq)
+        # ************************************** create optimizer **********************************************
+        OptimizerInst = Optimizer()
 
-    def test(self, data_loader, print_freq=10):
-        self.model.eval()
-        with torch.no_grad():
-            loss, correct = self._iteration(data_loader, print_freq, is_train=False)
+        model, image_size = net_create.createNewCNN(self.inputs['net_input'])
+        optimizer = OptimizerInst.createOptimizer(self.inputs['optimizer'], model, self.inputs['momentum'], self.inputs['weight_decay'], self.inputs['lr'])
+        model_dir = os.path.join(self.inputs['output_root'], self.inputs['dataset'] + "_" + str(self.inputs['train_size']))
+        print(model_dir)
+        if os.path.isdir(model_dir) and len(os.listdir(model_dir)) != 0:
+            list_of_files = glob.glob(model_dir + "/*.pth")
+            latest_file = max(list_of_files, key=os.path.getctime)
+            filename = latest_file
+            model, optimizer, loss, start_epoch, val_auc_list = net_create.load_checkpoint(model, optimizer, filename)
+        else:
+            model, image_size = net_create.createNewCNN(self.inputs['net_input'])
+            criterion = Lossfun.createLossFunction(self.inputs['loss_function'])
+            optimizer = OptimizerInst.createOptimizer(self.inputs['optimizer'], model, self.inputs['momentum'], self.inputs['weight_decay'], self.inputs['lr'])
+            scheduler = OptimizerInst.createScheduler(optimizer, len(data_loader), self.inputs['milestone_count'], self.inputs['decayLr'])
+          
+        return model, criterion, optimizer, scheduler
 
-    def loop(self, epochs, train_data, test_data, scheduler=None, print_freq=-1):
-        for ep in range(epochs):
-            self.epoch = ep
-            if scheduler is not None:
-                scheduler.step()
-            print("------ Training epochs: {} ------".format(ep))
-            self.train(train_data, print_freq)
-            print("------ Testing epochs: {} ------".format(ep))
-            self.test(test_data, print_freq)
-            if ep % self.save_freq == 0:
-                self.save(ep)
 
-    def save(self, epoch, **kwargs):
-        if self.save_dir is not None:
-            model_out_path = Path(self.save_dir)
-            state = {"epoch": epoch,
-                    "weight": self.model.state_dict()}
-            if not model_out_path.exists():
-                model_out_path.mkdir()
-            torch.save(state, model_out_path / "model_epoch_{}.pth".format(epoch))
+    def startTraining(self, start_epoch, num_epoch, dir_path, train_loader, val_loader, model, criterion, optimizer, scheduler, task, val_auc_list, auc_old, epoch_old):
+
+        # start training
+        for epoch in trange(start_epoch, num_epoch):
+            model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader, task, device)
+            epoch_return, auc_return = val_labeled(self.inputs['dataset_name'], model, optimizer, scheduler, val_loader, task, val_auc_list, dir_path, epoch, auc_old, epoch_old, loss, device)
+
+            #train(model, optimizer, criterion, train_loader_labeled, device, task)
+            #val(model, val_loader_labeled, device, val_auc_list, task, dir_path, epoch)
+            scheduler.step()
+
+            if auc_return > auc_old:
+                epoch_old = epoch_return
+                auc_old = auc_return
+            
+
+        auc_list = np.array(val_auc_list)
+        index = auc_list.argmax()
+        print('epoch %s is the best model' % (index))
+
+        return auc_return, epoch_return, auc_list, index
+
+
+    # ****************************************** start Pseudolabeling *********************************************************
+    def create_pseudolabels(self, net, dataset, loader, batch_size, device):
+        net.eval()
+        results = np.zeros((len(dataset), 10), dtype=np.float32)
+
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs = inputs.to(device)
+
+            outputs = net(inputs)
+            prob = F.softmax(outputs, dim=1)
+            
+            #results = prob.cpu().detach().numpy().tolist()
+            results = torch.max(prob.cpu().detach(),1)
+            targets = results
+            #print("targets: ", targets)
+            #print("result1:", results)
+            student_dataloader = createDataLoader((inputs,targets), batch_size)
+        return student_dataloader
+
+
+    def saveBestModel(self, dir_path, model, train_loader, val_loader, test_loader, task, auc_list, index):
+        #*************************** Evaluate trained Model **************************************
+        print('==> Testing model...')
+        # restore_model_path = os.path.join(
+        #     dir_path, 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
+        restore_model_path = os.path.join(dir_path,'training_'+ inputs['dataset_name'])
+        
+        model.load_state_dict(torch.load(restore_model_path)['net'])
+        test_labeled('train', model, train_loader, inputs['dataset'], task, device, output_root=inputs['output_root'])
+        test_labeled('val', model, val_loader, inputs['dataset'], task, device, output_root=inputs['output_root'])
+        test_labeled('test', model, test_loader, inputs['dataset'], task, device, output_root=inputs['output_root'])
+            
+        save_best_model_path = os.path.join( 
+            os.path.join(inputs['output_root'], inputs['dataset']), 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
+        copyfile(restore_model_path, save_best_model_path)
+        shutil.rmtree(dir_path)

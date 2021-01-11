@@ -8,7 +8,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 import numpy as np
 import pandas as pd
-
+from classes.PrepareData import createDataLoader
 
 def train_labeled(model, optimizer, criterion, train_loader, task, device):
 
@@ -218,21 +218,4 @@ def save_results(y_true, y_score, outputpath):
     df.to_csv(outputpath, sep=',', index=False, header=True, encoding="utf_8_sig")
 
 
-class PseudoLabels():
-    def __init__(self, device, num_classes, reg1=0.8, reg2=0.4):
-        self.device = device
-        self.num_classes = num_classes
-        self.reg1 = reg1
-        self.reg2 = reg2
 
-    def loss_soft_reg_ep(self, preds, soft_labels):
-        prob = F.softmax(preds, dim=1)
-        prob_avg = torch.mean(prob, dim=0)
-        p = torch.ones(num_classes).to(self.device) / num_classes
-
-        L_c = -torch.mean(torch.sum(soft_labels * F.log_softmax(preds, dim=1), dim=1))   # Soft labels
-        L_p = -torch.sum(torch.log(prob_avg) * p)
-        L_e = -torch.mean(torch.sum(prob * F.log_softmax(preds, dim=1), dim=1))
-
-        loss = L_c + reg1 * L_p + reg2 * L_e
-        return prob, loss

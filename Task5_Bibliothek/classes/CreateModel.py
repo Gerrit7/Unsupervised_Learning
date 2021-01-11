@@ -57,28 +57,29 @@ class CreateModel():
 
         return model, image_size
 
-    def load_checkpoint(self, model, optimizer, filename='checkpoint.pth.tar'):
+    def load_checkpoint(self, model, optimizer, scheduler, filename='checkpoint.pth.tar'):
         # Note: Input model & optimizer should be pre-defined.  This routine only updates their states.
         start_epoch = 0
         if os.path.isfile(filename):
             print("=> loading checkpoint '{}'".format(filename))
             checkpoint = torch.load(filename)
-            print("loading epoch")
-            start_epoch = checkpoint['epoch']+1
-            print("loading model")
+    
+
             model.load_state_dict(checkpoint['net'])
-            print("loading optimizer")
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            print("loading loss")
-            loss = checkpoint['loss']
-            print("loading auc_list")
             val_auc_list = checkpoint['auc_list']
+            start_epoch = checkpoint['epoch']+1
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
+            loss = checkpoint['loss']
+
+            
             print("=> loaded checkpoint '{}' (epoch {})"
                     .format(filename, checkpoint['epoch']))
+            return model, optimizer, scheduler, loss, start_epoch, val_auc_list
         else:
             print("=> no checkpoint found at '{}'".format(filename))
 
-        return model, optimizer, loss, start_epoch, val_auc_list
+        
 
 
 

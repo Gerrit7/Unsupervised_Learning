@@ -16,8 +16,9 @@ from tqdm import trange
 
 
 from classes.CreateModel import CreateModel, LossFunction, Optimizer
-from classes.Operations import train_labeled, val_labeled, test_labeled, PseudoLabels
-from classes.PrepareData import PrepareData
+from classes.Operations import train_labeled, val_labeled, test_labeled
+from classes.PrepareData import PrepareData, splitDataset, createDataLoader
+from classes.BaseLine import Baseline
 from classes.PseudoLabel import PseudoLabel
 from medmnist.info import INFO
 
@@ -53,9 +54,13 @@ def main(dataset_name,
         'train_size': train_size,
         'weight_decay': weight_decay,
         'net_input': net_input,
+        'count_students': count_students,
         'mode': mode,
         'task': task_input,
         'optimizer': optimizer_input,
+        'decayLr': decayLr,
+        'milestone_count': milestone_count,
+        'loss_function': loss_function,
         'augs': augmentations,
         'download': download
     }
@@ -111,93 +116,32 @@ def main(dataset_name,
     val_transform = prepareClass.createTransform(image_size=32, augmentations=augmentations)
     test_transform = prepareClass.createTransform(image_size=32, augmentations=augmentations)
     
-    train_dataset_labeled, train_dataset_unlabeled = prepareClass.prepareDataSet('train', train_transform, train_size)
-    train_loader_labeled   = prepareClass.createDataLoader(train_dataset_labeled, batch_size)
-    train_loader_unlabeled = prepareClass.createDataLoader(train_dataset_unlabeled, batch_size)
+    train_dataset, train_dataset_labeled, train_indices_labeled, train_dataset_unlabeled, train_indices_unlabeled = prepareClass.prepareDataSet('train', train_transform, train_size)
+    train_loader_labeled   = createDataLoader(train_dataset_labeled, batch_size)
+    train_loader_unlabeled = createDataLoader(train_dataset_unlabeled, batch_size)
     #print(len(train_loader_labeled), len(train_loader_unlabeled))
     
-    val_dataset_labeled, val_dataset_unlabeled = prepareClass.prepareDataSet('val', val_transform, train_size)
-    val_loader_labeled   = prepareClass.createDataLoader(val_dataset_labeled, batch_size)
-    val_loader_unlabeled = prepareClass.createDataLoader(val_dataset_unlabeled, batch_size)
+    train_dataset, val_dataset_labeled, val_indices_labeled, val_dataset_unlabeled, val_indices_unlabeled = prepareClass.prepareDataSet('val', val_transform, 1)
+    val_loader_labeled   = createDataLoader(val_dataset_labeled, batch_size)
+    #val_loader_unlabeled = createDataLoader(val_dataset_unlabeled, batch_size)
 
-    test_dataset_labeled, test_dataset_unlabeled = prepareClass.prepareDataSet('test', test_transform, train_size)
-    test_loader_labeled   = prepareClass.createDataLoader(test_dataset_labeled, batch_size)
-    test_loader_unlabeled = prepareClass.createDataLoader(test_dataset_unlabeled, batch_size)
-    # ************************************** create net architectures **************************************
-    net_create = CreateModel(dataset_name, n_channels, n_classes, device)
-
-    # ************************************** create loss function ******************************************
-    teacherlossfun = LossFunction()
+    train_dataset, test_dataset_labeled, test_indices_labeled, test_dataset_unlabeled, test_indices_unlabeled = prepareClass.prepareDataSet('test', test_transform, 1)
+    test_loader_labeled   = createDataLoader(test_dataset_labeled, batch_size)
+    #test_loader_unlabeled = createDataLoader(test_dataset_unlabeled, batch_size)
     
-    # ************************************** create optimizer **********************************************
-    teacheroptimizer = Optimizer()
-
 
     # ************************************** Training  *****************************************************
     if task_input == "BaseLine":
         print("==> Baseline-Training...")
         
-        model, image_size = net_create.createNewCNN(net_input)
-        criterion = teacherlossfun.createLossFunction(loss_function)
-        optimizer = teacheroptimizer.createOptimizer(optimizer_input,model, momentum, weight_decay, learning_rate)
-        scheduler = teacheroptimizer.createScheduler(optimizer, len(train_loader_labeled), milestone_count, decayLr)
-
-        # check wheather a training session has already startet for this dataset
-        if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
-            list_of_files = glob.glob(dir_path + "/*")
-            latest_file = max(list_of_files, key=os.path.getctime)
-            filename = latest_file
-            model, optimizer, loss, start_epoch, val_auc_list = net_create.load_checkpoint(model, optimizer, filename)
-            epoch_old = start_epoch-1
-            auc_old = val_auc_list[-1]
-        else:
-            if not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-            
-        # push optimizer and model to device (cpu/gpu)
-        for state in optimizer.state.values():
-            for k, v in state.items():
-                if isinstance(v, torch.Tensor):
-                    state[k] = v.to(device)
-        model.to(device)
-
-
-        # start training
-        for epoch in trange(start_epoch, num_epoch):
-            model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
-            epoch_return, auc_return = val_labeled(dataset_name, model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, dir_path, epoch, auc_old, epoch_old, loss, device)
-
-            #train(model, optimizer, criterion, train_loader_labeled, device, task)
-            #val(model, val_loader_labeled, device, val_auc_list, task, dir_path, epoch)
-            scheduler.step()
-
-            if auc_return > auc_old:
-                epoch_old = epoch_return
-                auc_old = auc_return
-            
-
-        auc_list = np.array(val_auc_list)
-        index = auc_list.argmax()
-        print('epoch %s is the best model' % (index))
+        baseline = Baseline(inputs, device)
+        # creating model
+        model, criterion, optimizer, scheduler, epoch_old, auc_old = baseline.defineOperators(n_channels, n_classes, train_loader_labeled, dir_path)
+        # training model
+        auc_return, epoch_return, auc_list, index = baseline.startTraining(start_epoch, num_epoch, dir_path, train_loader_labeled, val_loader_labeled, model, criterion, optimizer, scheduler, task, val_auc_list, auc_old, epoch_old)
+        # evaluate model
+        baseline.saveBestModel(dir_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index)
         
-
-        #*************************** Evaluate trained Model **************************************
-        print('==> Testing model...')
-        # restore_model_path = os.path.join(
-        #     dir_path, 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
-        restore_model_path = os.path.join(dir_path,'training_'+ dataset_name)
-        
-        model.load_state_dict(torch.load(restore_model_path)['net'])
-        test_labeled('train', model, train_loader_labeled, dataset_name, task, device, output_root=output_root)
-        test_labeled('val', model, val_loader_labeled, dataset_name, task, device, output_root=output_root)
-        test_labeled('test', model, test_loader_labeled, dataset_name, task, device, output_root=output_root)
-            
-        save_best_model_path = os.path.join( 
-            os.path.join(output_root, dataset_name), 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
-        copyfile(restore_model_path, save_best_model_path)
-        shutil.rmtree(dir_path)
-
-    
     
     
     elif task_input == "NoisyStudent":
@@ -208,75 +152,35 @@ def main(dataset_name,
 
     elif task_input == "Pseudolabel":
         print("==> Pseudolabel-Training...")
-
-    # ****************************************** create student nets ******************************************************+***
-        # *********** seperate unlabled dataset into student count sets ********
-        size_train_dataset = len(train_dataset_unlabeled)
-        for i in range(count_students):
-            vars()["studentnet_dataset_" + str(i)], train_dataset_unlabeled = torch.utils.data.random_split(train_dataset_unlabeled,[int(math.ceil(len(train_dataset_unlabeled)*(1/(count_students-i)))), int(math.floor(len(train_dataset_unlabeled)*(1-(1/(count_students-i)))))])
-            vars()["studentnet_loader_" + str(i)] = prepareClass.createDataLoader(vars()["studentnet_dataset_" + str(i)], batch_size)
-            #print("studentnet_dataset_", str(i), ": ", len(vars()["studentnet_dataset_" + str(i)]))
-
-            # ******************** create net architectures ********************
-            vars()["net_create" + str(i)] = CreateModel(vars()["studentnet_dataset_" + str(i)], n_channels, n_classes, device)
-            vars()["studentnet_" + str(i)], vars()["image_size" + str(i)] = vars()["net_create" + str(i)].createNewCNN(net_input)
-            
-            # ******************** create loss function ************************
-            vars()["lossfun" + str(i)] = LossFunction()
-            vars()["criterion" + str(i)] = vars()["lossfun" + str(i)].createLossFunction(loss_function)
-            
-            # ******************** create optimizer ****************************
-            vars()["student_optimizer" + str(i)] = Optimizer()
-            vars()["optimizer" + str(i)] = vars()["student_optimizer" + str(i)].createOptimizer(optimizer_input,vars()["studentnet_" + str(i)], momentum, weight_decay, learning_rate)
-            vars()["scheduler" + str(i)] = vars()["student_optimizer" + str(i)].createScheduler(vars()["optimizer" + str(i)], len(train_loader_labeled), milestone_count, decayLr)
-        
-    # ****************************************** create teacher net ******************************************************+***
-        # check wheather a net for this dataset is available
-        teachermodel, image_size = net_create.createNewCNN(net_input)
-        teacher_optimizer = teacheroptimizer.createOptimizer(optimizer_input, teachermodel, momentum, weight_decay, learning_rate)
-        model_dir = os.path.join(output_root, flag)
-        if os.path.isdir(model_dir) and len(os.listdir(model_dir)) != 0:
-            list_of_files = glob.glob(model_dir + "/*.pth")
-            latest_file = max(list_of_files, key=os.path.getctime)
-            filename = latest_file
-            teachernet, teacher_optimizer, loss, start_epoch, val_auc_list = net_create.load_checkpoint(teachermodel, teacher_optimizer, filename)
-        else:
-            teachernet, image_size = net_create.createNewCNN(net_input)
-            criterion = teacherlossfun.createLossFunction(loss_function)
-            teacher_optimizer = teacheroptimizer.createOptimizer(optimizer_input,teachernet, momentum, weight_decay, learning_rate)
-            scheduler = teacheroptimizer.createScheduler(teacher_optimizer, len(train_loader_labeled), milestone_count, decayLr)
-
-
-        
-        # create Operations instance
-        pseudolabeling = PseudoLabels(device, n_classes, reg1=0.8, reg2=0.4)
-        
-        for i in range(count_students):
-            if i == 0:
-                teachernet.eval()
-                results = np.zeros((len(train_loader_labeled.dataset), 10), dtype=np.float32)
-
-                for batch_idx, (inputs, targets) in enumerate(train_loader_labeled):
-                    inputs = inputs.to(device)
-                    print(len(inputs))
-                    outputs = teachernet(inputs)
-                    prob = F.softmax(outputs, dim=1)
-                    print(outputs)
-                    print(prob)
-            # else:
-            #     vars()["studentnet_" + str(i)].eval()
-            #     results = np.zeros((len(vars()["studentnet_loader_" + str(i)].dataset), 10), dtype=np.float32)
-
-            #     for batch_idx, (inputs, targets) in enumerate(vars()["studentnet_loader_" + str(i)]):
-            #         inputs = inputs.to(device)
-            #         print(len(inputs))
-            #         outputs = vars()["studentnet_" + str(i)](inputs)
-            #         prob = F.softmax(outputs, dim=1)
-            #         print(outputs)
-            #         print(prob)
-                    #prob, loss = pseudolabeling.loss_soft_reg_ep(outputs, soft_labels)
-                    #results[index.detach().numpy().tolist()] = prob.cpu().detach().numpy().tolist()
-
-                #vars()["studentnet_loader_" + str(i)].dataset.update_labels(results, unlabeled_indexes)
-
     
+    # ****************************************** create teacher net ******************************************************+***
+        for i in range(count_students):
+            vars()["pseudolabel" + str(i)] = PseudoLabel(inputs, device)
+            print(vars()["pseudolabel" + str(i)])
+            if i == 0:
+                model, criterion, optimizer, scheduler = vars()["pseudolabel" + str(i)].defineOperators(n_channels, n_classes, dir_path, train_loader_unlabeled)
+            else:
+                pseudolabeled_dataloader = vars()["pseudolabel" + str(i)].create_pseudolabels(net_input, train_dataset_unlabeled, train_loader_unlabeled, batch_size, device)
+                vars()["net" + str(i)], vars()["criterion" + str(i)], vars()["optimizer" + str(i)], vars()["scheduler" + str(i)] = vars()["pseudolabel" + str(i)].defineOperators(n_channels, n_classes, dir_path, pseudolabeled_dataloader)
+                auc_return, epoch_return, auc_list, index = vars()["pseudolabel" + str(i)].startTraining(start_epoch, num_epoch, dir_path, pseudolabeled_dataloader, val_loader_labeled, model, criterion, optimizer, scheduler, task, val_auc_list, auc_old, epoch_old)
+                vars()["pseudolabel" + str(i)].saveBestModel(dir_path, model, pseudolabeled_dataloader, val_loader_labeled, test_loader_labeled, task, auc_list, index)
+        
+        
+    # # ****************************************** create student nets **********************************************************
+    #     for i in range(count_students):
+    #     # ******************** create net architectures ********************
+    #         vars()["net_create" + str(i)] = CreateModel(dataset_name, n_channels, n_classes, device)
+    #         vars()["studentnet_" + str(i)], vars()["image_size" + str(i)] = vars()["net_create" + str(i)].createNewCNN(net_input)
+            
+    #     # ******************** create loss function ************************
+    #         vars()["lossfun" + str(i)] = LossFunction()
+    #         vars()["criterion" + str(i)] = vars()["lossfun" + str(i)].createLossFunction(loss_function)
+            
+    #     # ******************** create optimizer ****************************
+    #         vars()["student_optimizer" + str(i)] = Optimizer()
+    #         vars()["optimizer" + str(i)] = vars()["student_optimizer" + str(i)].createOptimizer(optimizer_input,vars()["studentnet_" + str(i)], momentum, weight_decay, learning_rate)
+    #         vars()["scheduler" + str(i)] = vars()["student_optimizer" + str(i)].createScheduler(vars()["optimizer" + str(i)], len(train_loader_labeled), milestone_count, decayLr)
+        
+
+
+                

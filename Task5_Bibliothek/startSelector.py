@@ -22,7 +22,7 @@ def sel_task():
          e_count_stud.config(state="disabled")
     else:
         e_count_stud.config(state="normal")
-    #     e2_var.set(1)
+    #     var_batchsize.set(1)
     #     e2.config(state="disabled") 
     #     e3.config(state="disabled")
     #     e4.config(state="disabled")
@@ -31,7 +31,7 @@ def sel_task():
     # else:
     #     e1.config(state='normal')
     #     e2.config(state='normal')
-    #     e2_var.set(8)
+    #     var_batchsize.set(8)
     #     e3.config(state='normal')
     #     e4.config(state='normal')
     #     e6.config(state='normal')
@@ -98,17 +98,17 @@ def submit():
         print("Please select a loss function")
     else:
         global num_epoch
-        num_epoch = e1_var.get()
+        num_epoch = var_epochs.get()
         global batch_size
-        batch_size = e2_var.get()
+        batch_size = var_batchsize.get()
         global learning_rate
-        learning_rate = e3_var.get()
+        learning_rate = var_lr.get()
         global momentum
-        momentum = e4_var.get()
+        momentum = var_momentum.get()
         global train_size
-        train_size = e5_var.get()*0.01
+        train_size = var_percent.get()*0.01
         global weight_decay
-        weight_decay = e6_var.get()
+        weight_decay = var_weightdecay.get()
         
         root.destroy()
         # start the main function for every selected dataset
@@ -345,31 +345,31 @@ Label(root, text="Weight Decay").grid(row=10 ,column = 6, padx='5', pady='5',sti
 Label(root, text="Count of Student Nets").grid(row=11 ,column = 6, padx='5', pady='5',sticky='ew')
 
 
-e1_var = IntVar()
-e2_var = IntVar()
-e3_var = DoubleVar() 
+var_epochs = IntVar()
+var_batchsize = IntVar()
+var_lr = DoubleVar() 
 var_decayLr = DoubleVar()
 var_milestone = IntVar()
-e4_var = DoubleVar() 
-e5_var = IntVar()
-e6_var = DoubleVar() 
+var_momentum = DoubleVar() 
+var_percent = IntVar()
+var_weightdecay = DoubleVar() 
 var_count_stud = IntVar()
 
-e1 = Entry(root,textvariable=e1_var)
+e1 = Entry(root,textvariable=var_epochs)
 e1.grid(row=8 ,column = 5, padx='5', pady='5',sticky='ew')
-e2 = Entry(root,textvariable=e2_var)
+e2 = Entry(root,textvariable=var_batchsize)
 e2.grid(row=9 ,column = 5, padx='5', pady='5',sticky='ew')
-e3 = Entry(root,textvariable=e3_var)
+e3 = Entry(root,textvariable=var_lr)
 e3.grid(row=10 ,column = 5, padx='5', pady='5',sticky='ew')
 e7 = Entry(root,textvariable=var_decayLr)
 e7.grid(row=11 ,column = 5, padx='5', pady='5',sticky='ew')
 e8 = Entry(root,textvariable=var_milestone)
 e8.grid(row=12 ,column = 5, padx='5', pady='5',sticky='ew')
-e4 = Entry(root,textvariable=e4_var)
+e4 = Entry(root,textvariable=var_momentum)
 e4.grid(row=8 ,column = 7, padx='5', pady='5',sticky='ew')
-e5 = Entry(root,textvariable=e5_var)
+e5 = Entry(root,textvariable=var_percent)
 e5.grid(row=9 ,column = 7, padx='5', pady='5',sticky='ew')
-e6 = Entry(root,textvariable=e6_var)
+e6 = Entry(root,textvariable=var_weightdecay)
 e6.grid(row=10 ,column = 7, padx='5', pady='5',sticky='ew')
 e_count_stud = Entry(root,textvariable=var_count_stud)
 e_count_stud.grid(row=11 ,column = 7, padx='5', pady='5',sticky='ew')
@@ -384,15 +384,15 @@ data_root.set("/DataSets/medmnist")
 data_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/DataSets/medmnist")
 output_root.set("/Master-Thesis/TrainedNets/")
 output_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/TrainedNets")
-e1_var.set(100)
-e2_var.set(8)
-e3_var.set(0.001)
+var_epochs.set(100)
+var_batchsize.set(8)
+var_lr.set(0.01)
 var_decayLr.set(0.1)
 var_milestone.set(0)
-e4_var.set(0.9)
-e5_var.set(100)
-e6_var.set(0)
-var_count_stud.set(0)
+var_momentum.set(0.9)
+var_percent.set(75)
+var_weightdecay.set(0)
+var_count_stud.set(3)
 
 root.mainloop()
 

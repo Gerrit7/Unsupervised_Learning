@@ -91,16 +91,29 @@ class PrepareData:
                             split=split,
                             transform=transform,
                             download=self.download)
+        indices_labeled = int(math.ceil(len(dataset)*split_size))
+        indices_unlabeled = int(math.floor(len(dataset)*(1-split_size)))
+        # changed random_split in torch.utils.data. dataset.py for returning indices
+        [data_labeled, indices_labeled], [data_unlabeled, indices_unlabeled] = torch.utils.data.random_split(dataset,[indices_labeled, indices_unlabeled])
 
-        data_labeled, data_unlabeled = torch.utils.data.random_split(dataset,[int(math.ceil(len(dataset)*split_size)), int(math.floor(len(dataset)*(1-split_size)))])
-
-        return data_labeled, data_unlabeled
+        return dataset, data_labeled, indices_labeled, data_unlabeled, indices_unlabeled
 
 
-    def createDataLoader(self, data_in, batch_size):
-        data_loader = data.DataLoader(dataset=data_in,
-                                    batch_size=batch_size,
-                                    shuffle=True,
-                                    drop_last= True)
+def createDataLoader(data_in, batch_size):
+    data_loader = data.DataLoader(dataset=data_in,
+                                batch_size=batch_size,
+                                shuffle=True,
+                                drop_last= True)
 
-        return data_loader
+    return data_loader
+
+def splitDataset(seq, num):
+    avg = len(seq) / float(num)
+    out = []
+    last = 0.0
+
+    while last < len(seq):
+        out.append(seq[int(last):int(last + avg)])
+        last += avg
+
+    return out
