@@ -61,8 +61,8 @@ class PrepareData:
             elif aug =="randomRotation":
                 tranform_compose_list.append(transforms.RandomRotation(
                             degrees=aug_values["RandomRotation"]["degrees"]))
-            else:
-                print("augmentation not found!")
+            #else:
+                #print("augmentation not found!")
         
         transform = transforms.Compose(tranform_compose_list)
         return transform

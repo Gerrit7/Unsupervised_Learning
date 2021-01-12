@@ -109,6 +109,8 @@ def submit():
         train_size = var_percent.get()*0.01
         global weight_decay
         weight_decay = var_weightdecay.get()
+        global teacher_dependent
+        teacher_dependent = var_teacher_dependent.get()
         
         root.destroy()
         # start the main function for every selected dataset
@@ -131,6 +133,7 @@ def submit():
              milestones,
              lossfun,
              augmentations,
+             teacher_dependent,
              True)
         
 
@@ -343,7 +346,7 @@ Label(root, text="Momentum").grid(row=8 ,column = 6, padx='5', pady='5',sticky='
 Label(root, text="% of trainset").grid(row=9 ,column = 6, padx='5', pady='5',sticky='ew')
 Label(root, text="Weight Decay").grid(row=10 ,column = 6, padx='5', pady='5',sticky='ew')
 Label(root, text="Count of Student Nets").grid(row=11 ,column = 6, padx='5', pady='5',sticky='ew')
-
+Label(root, text="Teacher dependent training").grid(row=12 ,column = 6, padx='5', pady='5',sticky='ew')
 
 var_epochs = IntVar()
 var_batchsize = IntVar()
@@ -354,6 +357,7 @@ var_momentum = DoubleVar()
 var_percent = IntVar()
 var_weightdecay = DoubleVar() 
 var_count_stud = IntVar()
+var_teacher_dependent = BooleanVar()
 
 e1 = Entry(root,textvariable=var_epochs)
 e1.grid(row=8 ,column = 5, padx='5', pady='5',sticky='ew')
@@ -373,6 +377,8 @@ e6 = Entry(root,textvariable=var_weightdecay)
 e6.grid(row=10 ,column = 7, padx='5', pady='5',sticky='ew')
 e_count_stud = Entry(root,textvariable=var_count_stud)
 e_count_stud.grid(row=11 ,column = 7, padx='5', pady='5',sticky='ew')
+c8 = Checkbutton(root,variable=var_teacher_dependent, onvalue=True, offvalue=False)
+c8.grid(row=12 ,column = 7, padx='5', pady='5',sticky='ew')
 
 
 # submit button for starting the main function
@@ -383,16 +389,17 @@ SubmitButton.grid(row=14 ,column = 5, columnspan=2, padx='5', pady='5',sticky='e
 data_root.set("/DataSets/medmnist")
 data_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/DataSets/medmnist")
 output_root.set("/Master-Thesis/TrainedNets/")
-output_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/TrainedNets")
+output_root_complete.set("/home/gerrit/Dokumente/Master_Thesis/TrainedNets/PseudoLabeling")
 var_epochs.set(100)
-var_batchsize.set(8)
-var_lr.set(0.01)
+var_batchsize.set(128)
+var_lr.set(0.001)
 var_decayLr.set(0.1)
 var_milestone.set(0)
 var_momentum.set(0.9)
-var_percent.set(75)
+var_percent.set(10)
 var_weightdecay.set(0)
 var_count_stud.set(3)
+var_teacher_dependent.set(False)
 
 root.mainloop()
 

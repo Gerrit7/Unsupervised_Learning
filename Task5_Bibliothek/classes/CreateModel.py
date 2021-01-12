@@ -7,8 +7,7 @@ from models.models import EfficientNet, ResNet18, ResNet50
 from models.models import Inception_ResNetv2
 
 class CreateModel():
-    def __init__(self, dataset_name, n_channels, n_classes, device):
-        self. dataset_name = dataset_name
+    def __init__(self, n_channels, n_classes, device):
         self.n_channels = n_channels
         self. n_classes = n_classes
         self.device = device
@@ -18,39 +17,39 @@ class CreateModel():
         if net_input == 'Resnet18':
             model = ResNet18(in_channels=self.n_channels, num_classes=self.n_classes).to(self.device)
             image_size = 28
-            print('using ResNet18')
+            #print('using ResNet18')
         
         elif net_input == 'Resnet50':
             model = ResNet50(in_channels=self.n_channels, num_classes=self.n_classes).to(self.device)
             image_size = 28
-            print('using ResNet50')
+            #print('using ResNet50')
         
         elif net_input == 'EfficientNet-b0':
             model = EfficientNet.from_name('efficientnet-b0',self.n_channels)
             model._fc= nn.Linear(1280, self.n_classes)
             model.to(self.device)
             image_size = 224
-            print('using EfficientNet-b0')
+            #print('using EfficientNet-b0')
         
         elif net_input == 'EfficientNet-b1':
             model = EfficientNet.from_name('efficientnet-b1',self.n_channels)
             model._fc= nn.Linear(1280, self.n_classes)
             model.to(self.device)
             image_size = 224
-            print('using EfficientNet-b1')
+            #print('using EfficientNet-b1')
         
         elif net_input == 'EfficientNet-b7':
             model = EfficientNet.from_name('efficientnet-b7',self.n_channels)
             model._fc= nn.Linear(1280, self.n_classes)
             model.to(self.device)
             image_size = 224
-            print('using EfficientNet-b7')
+            #print('using EfficientNet-b7')
         
         elif net_input == 'Inception-Resnet-V2':
             model = Inception_ResNetv2(self.n_channels)
             model.linear= nn.Linear(1536, self.n_classes, True)
             image_size = 256
-            print('using Inception-Resnet-V2')
+            #print('using Inception-Resnet-V2')
 
         else:
             print("Net not found!")
@@ -104,13 +103,13 @@ class Optimizer():
         # setting up the optimizer
         if optimizer_input == 'SGD':
             optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
-            print('optimizer is SGD')
+            #print('optimizer is SGD')
         elif optimizer_input == 'Adam':
             optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-            print('optimizer is Adam')
+            #print('optimizer is Adam')
         elif optimizer_input == 'RMSprop':
             optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum, centered=False)
-            print('optimizer is RMSprop')
+            #print('optimizer is RMSprop')
         else:
             print("undefined optimizer: taking default SGD")
             optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
