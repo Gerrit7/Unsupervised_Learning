@@ -9,14 +9,16 @@ import numpy as np
 import pandas as pd
 import math
 import numpy as np
+from pathlib import Path
 import torch
 from torch.nn import functional as F
 import torch.nn as nn
 from tqdm import trange
 import torch.utils.data as data
 
+from models.models import EfficientNet, ResNet18, ResNet50
 from classes.CreateModel import createNewCNN, load_checkpoint, createLossFunction, createOptimizer, createScheduler
-from classes.Operations import train_labeled, val_labeled, test_labeled, evalModel, defineOperators, create_pseudolabels
+from classes.Operations import train_labeled, val_labeled, test_labeled, evalModel, defineOperators, create_pseudolabels, predict
 from classes.PrepareData import PrepareData, splitDataset, createDataLoader, ConcatDataset
 from medmnist.info import INFO
 from functions.dataset_pseudo import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIST, PneumoniaMNIST, RetinaMNIST, \
@@ -177,16 +179,20 @@ def main(dataset_name,
                 labeled_targets.append(np.argmax(tupl))
             
         labeled_inputs = torch.stack(labeled_inputs)
-        labeled_targets = np.reshape(torch.stack(labeled_targets), (-1,1)).tolist()
+        labeled_targets = torch.stack(labeled_targets)
 
         # ************************************** Create Models  *****************************************
-        # load trainer model
+        # create teacher model
+        model, image_size = createNewCNN(inputs['net_input'], n_channels, n_classes, device)
+        
+        # load model parameters
         if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
-            list_of_files = glob.glob(dir_path + "/*.pth")
+            list_of_files = glob.glob(dir_path + "/*bestmodel.pth")
             latest_file = max(list_of_files, key=os.path.getctime)
-            start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, train_loader_labeled, dir_path, inputs, device)
+            model.load_state_dict(torch.load(Path(latest_file)))
             #model, optimizer, scheduler, loss, start_epoch, val_auc_list = load_checkpoint(model, optimizer, scheduler, latest_file)
 
+        combined_dataloader = train_loader_unlabeled
         for i in range(count_students):
             val_auc_list = []
             epoch_old = 0
@@ -198,12 +204,21 @@ def main(dataset_name,
             
             #test_labeled('train', model, train_loader_labeled, flag, train_size, task, device, output_root=None)
             
-            pseudo_inputs, pseudo_targets = create_pseudolabels(model, train_dataset_unlabeled, train_loader_unlabeled, batch_size, task, device)
-            
+            #pseudo_inputs, pseudo_targets = create_pseudolabels(model, train_dataset_unlabeled, train_loader_unlabeled, batch_size, task, device)
+            pseudo_inputs, pseudo_targets = predict(combined_dataloader, model, device)
 
+            print(type(pseudo_inputs))
+            print(pseudo_inputs.size())
+            print(type(pseudo_targets))
+            print(pseudo_targets.size())
+
+            print(type(labeled_inputs))
+            print(labeled_inputs.size())
+            print(type(labeled_targets))
+            print(labeled_targets.size())
             combined_inputs = np.concatenate((np.asarray(labeled_inputs), np.asarray(pseudo_inputs))) 
             combined_targets = np.concatenate((np.asarray(labeled_targets), np.asarray(pseudo_targets)))
-            np.savez(os.path.join(dir_path, 'combined_' + inputs['dataset'] +'.npz'), inputs=combined_inputs, targets=combined_targets)
+            #np.savez(os.path.join(dir_path, 'combined_' + inputs['dataset'] +'.npz'), inputs=combined_inputs, targets=combined_targets)
             combined_inputs = torch.from_numpy(combined_inputs)
             combined_targets = torch.from_numpy(combined_targets)
 

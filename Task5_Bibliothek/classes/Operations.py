@@ -10,7 +10,7 @@ import torch.nn as nn
 from sklearn.metrics import accuracy_score, roc_auc_score
 from torch.nn import functional as F
 from tqdm import trange
-from pathlib import Path
+
 
 from classes.PrepareData import createDataLoader
 from classes.CreateModel import createNewCNN, load_checkpoint, createLossFunction, createOptimizer, createScheduler
@@ -84,7 +84,7 @@ def val_labeled(model, optimizer, scheduler, val_loader, task, val_auc_list, dir
                 m = nn.Softmax(dim=1)
                 outputs = m(outputs).to(device)
                 targets = targets.float().resize_(len(targets), 1)
-            print("outputs: ", outputs)
+            #print("outputs: ", outputs)
             y_true = torch.cat((y_true, targets), 0)
             y_score = torch.cat((y_score, outputs), 0)
 
@@ -280,39 +280,59 @@ def evalModel(dir_path, model, train_loader, val_loader, test_loader, task, auc_
 
 
 def create_pseudolabels(model, dataset, loader, batch_size, task, device):
-    checkpoint = torch.load(Path('/home/gerrit/Dokumente/Master_Thesis/TrainedNets/PseudoLabeling/breastmnist_0.25/ckpt_0_auc_0.48789.pth'))
-    model.load_state_dict(checkpoint['net'])
     
     model.eval()
     results = np.zeros((len(dataset), 10), dtype=np.float32)
     input_return = []
     target_return = []
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(loader):
-            inputs = inputs.to(device)
-            outputs = model(inputs)
+        for batch_idx, (inputs, targets) in enumerate(loader): 
+            outputs = model(inputs.to(device))
 
             if task == 'multi-label, binary-class':
                 #targets = targets.to(torch.float32).to(device)
                 m = nn.Sigmoid()
-                prob = m(outputs).to(device)
+                outputs = m(outputs).to(device)
             else:
                 #targets = targets.squeeze().long().to(device)
                 m = nn.Softmax(dim=1)
-                prob = m(outputs).to(device)
+                outputs = m(outputs).to(device)
                 #targets = targets.float().resize_(len(targets), 1)
-            
-            #prob = F.softmax(outputs, dim=1)
-            result = prob.cpu().detach().numpy().tolist()
+            print(outputs)
+            result = outputs.cpu().detach().numpy().tolist()
             
             for image in inputs:
                 input_return.append(image.reshape(28,28))
             for tupl in result:
                 target_return.append(np.argmax(tupl))
-                print("prog: ", np.argmax(tupl))
-            print("output: ", outputs)
-            print("real: ", targets)
+                #print("prog: ", np.argmax(tupl))
+            #print("output: ", outputs)
+            #print("real: ", targets)
             
     input_return = torch.stack(input_return)
 
     return input_return.tolist(), np.reshape(target_return, (-1,1)).tolist()
+
+def step(inputs, model, device):
+    data, _ = inputs # ignore label
+    outputs = model(data.to(device))
+    _, preds = torch.max(outputs.data , 1)
+    # preds, outputs  are cuda tensors. Right?
+    return preds, outputs, data
+
+def predict(dataloader, model, device):
+    num_elements = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    batch_size = dataloader.batch_size
+    predictions = torch.zeros(num_elements)
+    images = torch.zeros(num_elements, 28, 28)
+    for i, batch in enumerate(dataloader):
+        start = i*batch_size
+        end = start + batch_size
+        if i == num_batches - 1:
+            end = num_elements
+        pred, output, data = step(batch, model, device)
+        predictions[start:end] = pred
+        images[start:end] = data.reshape(end-start, 28, 28)
+
+    return images, predictions
