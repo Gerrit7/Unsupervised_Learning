@@ -174,7 +174,7 @@ def main(dataset_name,
         labeled_targets = []  
         for batch_idx, (train_inputs, train_targets) in enumerate(train_loader_labeled):
             for image in train_inputs:
-                labeled_inputs.append(image.reshape(28,28))
+                labeled_inputs.append(image.reshape(1,28,28))
             for tupl in train_targets:
                 labeled_targets.append(np.argmax(tupl))
             
@@ -206,16 +206,16 @@ def main(dataset_name,
             
             #pseudo_inputs, pseudo_targets = create_pseudolabels(model, train_dataset_unlabeled, train_loader_unlabeled, batch_size, task, device)
             pseudo_inputs, pseudo_targets = predict(combined_dataloader, model, device)
+            
+            # print(type(pseudo_inputs))
+            # print(pseudo_inputs.size())
+            # print(type(pseudo_targets))
+            # print(pseudo_targets.size())
 
-            print(type(pseudo_inputs))
-            print(pseudo_inputs.size())
-            print(type(pseudo_targets))
-            print(pseudo_targets.size())
-
-            print(type(labeled_inputs))
-            print(labeled_inputs.size())
-            print(type(labeled_targets))
-            print(labeled_targets.size())
+            # print(type(labeled_inputs))
+            # print(labeled_inputs.size())
+            # print(type(labeled_targets))
+            # print(labeled_targets.size())
             combined_inputs = np.concatenate((np.asarray(labeled_inputs), np.asarray(pseudo_inputs))) 
             combined_targets = np.concatenate((np.asarray(labeled_targets), np.asarray(pseudo_targets)))
             #np.savez(os.path.join(dir_path, 'combined_' + inputs['dataset'] +'.npz'), inputs=combined_inputs, targets=combined_targets)

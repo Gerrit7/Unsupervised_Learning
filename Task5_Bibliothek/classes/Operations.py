@@ -325,7 +325,7 @@ def predict(dataloader, model, device):
     num_batches = len(dataloader)
     batch_size = dataloader.batch_size
     predictions = torch.zeros(num_elements)
-    images = torch.zeros(num_elements, 28, 28)
+    images = torch.zeros(num_elements, 1, 28, 28)
     for i, batch in enumerate(dataloader):
         start = i*batch_size
         end = start + batch_size
@@ -333,6 +333,6 @@ def predict(dataloader, model, device):
             end = num_elements
         pred, output, data = step(batch, model, device)
         predictions[start:end] = pred
-        images[start:end] = data.reshape(end-start, 28, 28)
+        images[start:end] = data
 
     return images, predictions
