@@ -51,6 +51,9 @@ class MedMNIST(Dataset):
         elif self.split == 'pseudo':
             self.img = npz_file['pseudo_images']
             self.label = npz_file['pseudo_labels']
+        elif self.split == '':
+            self.img = npz_file['inputs']
+            self.label = npz_file['targets']
 
     def __getitem__(self, index):
         img, target = self.img[index], self.label[index].astype(int)

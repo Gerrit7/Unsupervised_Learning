@@ -10,32 +10,24 @@ import torch.nn as nn
 from sklearn.metrics import accuracy_score, roc_auc_score
 from torch.nn import functional as F
 from tqdm import trange
+from pathlib import Path
 
-from classes.CreateModel import CreateModel, LossFunction, Optimizer
 from classes.PrepareData import createDataLoader
-
+from classes.CreateModel import createNewCNN, load_checkpoint, createLossFunction, createOptimizer, createScheduler
 
 def defineOperators(n_channels, n_classes, dataloader, dir_path, inputs, device):
-    # ************************************** create net architectures **************************************
-    net_create = CreateModel(n_channels, n_classes, device)
 
-    # ************************************** create loss function ******************************************
-    teacherlossfun = LossFunction()
-    
-    # ************************************** create optimizer **********************************************
-    teacheroptimizer = Optimizer()
-    print(inputs['net_input'])
-    model, image_size = net_create.createNewCNN(inputs['net_input'])
-    criterion = teacherlossfun.createLossFunction(inputs['loss_function'])
-    optimizer = teacheroptimizer.createOptimizer(inputs['optimizer'], model, inputs['momentum'], inputs['weight_decay'], inputs['lr'])
-    scheduler = teacheroptimizer.createScheduler(optimizer, len(dataloader), inputs['milestone_count'], inputs['decayLr'])
+    model, image_size = createNewCNN(inputs['net_input'], n_channels, n_classes, device)
+    criterion = createLossFunction(inputs['loss_function'])
+    optimizer = createOptimizer(inputs['optimizer'], model, inputs['momentum'], inputs['weight_decay'], inputs['lr'])
+    scheduler = createScheduler(optimizer, len(dataloader), inputs['milestone_count'], inputs['decayLr'])
 
     # check wheather a training session has already startet for this dataset
     if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
-        list_of_files = glob.glob(dir_path + "/*")
+        list_of_files = glob.glob(dir_path + "/*.pth")
         latest_file = max(list_of_files, key=os.path.getctime)
         filename = latest_file
-        model, optimizer, scheduler, loss, start_epoch, val_auc_list = net_create.load_checkpoint(model, optimizer, scheduler, filename)
+        model, optimizer, scheduler, loss, start_epoch, val_auc_list = load_checkpoint(model, optimizer, scheduler, filename)
         epoch_old = start_epoch-1
         auc_old = val_auc_list[-1]
     else:
@@ -60,7 +52,7 @@ def train_labeled(model, optimizer, criterion, train_loader, task, device):
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         optimizer.zero_grad()
         outputs = model(inputs.to(device))
-
+        
         if task == 'multi-label, binary-class':
             targets = targets.to(torch.float32).to(device)
             loss = criterion(outputs, targets)
@@ -92,7 +84,7 @@ def val_labeled(model, optimizer, scheduler, val_loader, task, val_auc_list, dir
                 m = nn.Softmax(dim=1)
                 outputs = m(outputs).to(device)
                 targets = targets.float().resize_(len(targets), 1)
-
+            print("outputs: ", outputs)
             y_true = torch.cat((y_true, targets), 0)
             y_score = torch.cat((y_score, outputs), 0)
 
@@ -173,7 +165,7 @@ def test_labeled(split, model, data_loader, flag, split_size, task, device, outp
         print('%s AUC: %.5f ACC: %.5f' % (split, auc, acc))
 
         if output_root is not None:
-            output_dir = os.path.join(output_root, flag + "_" + str(split_size))
+            output_dir = os.path.join(output_root, flag + "_" + '%.2f' % split_size)
             if not os.path.exists(output_dir):
                 os.mkdir(output_dir)
             output_path = os.path.join(output_dir, '%s.csv' % (split))
@@ -268,7 +260,7 @@ def save_results(y_true, y_score, outputpath):
     df.to_csv(outputpath, sep=',', index=False, header=True, encoding="utf_8_sig")
 
 
-def saveBestModel(dir_path, model, train_loader, val_loader, test_loader, task, auc_list, index, inputs, device):
+def evalModel(dir_path, model, train_loader, val_loader, test_loader, task, auc_list, index, inputs, device):
     #*************************** Evaluate trained Model **************************************
     print('==> Testing model...')
     restore_model_path = os.path.join(
@@ -287,19 +279,40 @@ def saveBestModel(dir_path, model, train_loader, val_loader, test_loader, task, 
 
 
 
-def create_pseudolabels(model, dataset, loader, batch_size, device):
+def create_pseudolabels(model, dataset, loader, batch_size, task, device):
+    checkpoint = torch.load(Path('/home/gerrit/Dokumente/Master_Thesis/TrainedNets/PseudoLabeling/breastmnist_0.25/ckpt_0_auc_0.48789.pth'))
+    model.load_state_dict(checkpoint['net'])
+    
     model.eval()
     results = np.zeros((len(dataset), 10), dtype=np.float32)
+    input_return = []
+    target_return = []
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs = inputs.to(device)
+            outputs = model(inputs)
 
-    for batch_idx, (inputs, targets) in enumerate(loader):
-        inputs = inputs.to(device)
+            if task == 'multi-label, binary-class':
+                #targets = targets.to(torch.float32).to(device)
+                m = nn.Sigmoid()
+                prob = m(outputs).to(device)
+            else:
+                #targets = targets.squeeze().long().to(device)
+                m = nn.Softmax(dim=1)
+                prob = m(outputs).to(device)
+                #targets = targets.float().resize_(len(targets), 1)
+            
+            #prob = F.softmax(outputs, dim=1)
+            result = prob.cpu().detach().numpy().tolist()
+            
+            for image in inputs:
+                input_return.append(image.reshape(28,28))
+            for tupl in result:
+                target_return.append(np.argmax(tupl))
+                print("prog: ", np.argmax(tupl))
+            print("output: ", outputs)
+            print("real: ", targets)
+            
+    input_return = torch.stack(input_return)
 
-        outputs = model(inputs)
-        prob = F.softmax(outputs, dim=1)
-        
-        #results = prob.cpu().detach().numpy().tolist()
-        results = torch.max(prob.cpu().detach(),1)
-        result_targets = torch.reshape(results[1],(-1,1))
-        new_dataset = torch.utils.data.TensorDataset(inputs, result_targets)
-        student_dataloader = createDataLoader(new_dataset, batch_size)
-    return student_dataloader
+    return input_return.tolist(), np.reshape(target_return, (-1,1)).tolist()

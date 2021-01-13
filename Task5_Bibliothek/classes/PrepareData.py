@@ -21,7 +21,7 @@ class PrepareData:
 
     def createTransform(self, image_size=32, augmentations=[]):
         aug_values = {
-            "CenterCrop"   : {"size": image_size},
+            "CenterCrop"   : {"size": 10},
             "ColorJitter"  : {"brightness": 0, "contrast": 0, "saturation": 0, "hue": 0},
             "GaussianBlur" : {"kernel": [3,3], "sigma" : 0.1},
             "Normalize"    : {"mean": [0.5], "std": [0.5]},
@@ -83,7 +83,6 @@ class PrepareData:
             "organmnist_sagittal": OrganMNISTSagittal,
         }
         DataClass = flag_to_class[self.flag]
-
         data_labeled = []
         data_unlabeled = []
 
@@ -93,11 +92,14 @@ class PrepareData:
                             download=self.download)
         indices_labeled = int(math.ceil(len(dataset)*split_size))
         indices_unlabeled = int(math.floor(len(dataset)*(1-split_size)))
-
-        # changed random_split in torch.utils.data. dataset.py for returning indices
-        [data_labeled, indices_labeled], [data_unlabeled, indices_unlabeled] = torch.utils.data.random_split(dataset,[indices_labeled, indices_unlabeled])
         
-        return dataset, data_labeled, indices_labeled, data_unlabeled, indices_unlabeled
+        # changed random_split in torch.utils.data. dataset.py for returning indices
+        [subset_labeled, indices_labeled], [subset_unlabeled, indices_unlabeled] = torch.utils.data.random_split(dataset,[indices_labeled, indices_unlabeled])
+
+        dataset_labeled = [dataset[i] for i in indices_labeled]
+        dataset_unlabeled = [dataset[i] for i in indices_unlabeled]
+        
+        return dataset, subset_labeled, dataset_labeled, subset_unlabeled, dataset_unlabeled
 
 
 def createDataLoader(data_in, batch_size):
@@ -117,3 +119,13 @@ def splitDataset(seq, num):
         last += avg
 
     return out
+
+class ConcatDataset(torch.utils.data.Dataset):
+    def __init__(self, *datasets):
+        self.datasets = datasets
+
+    def __getitem__(self, i):
+        return tuple(d[i] for d in self.datasets)
+
+    def __len__(self):
+        return min(len(d) for d in self.datasets)

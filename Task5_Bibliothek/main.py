@@ -13,12 +13,14 @@ import torch
 from torch.nn import functional as F
 import torch.nn as nn
 from tqdm import trange
+import torch.utils.data as data
 
-
-from classes.CreateModel import CreateModel, LossFunction, Optimizer
-from classes.Operations import train_labeled, val_labeled, test_labeled, saveBestModel, defineOperators, create_pseudolabels, create_pseudolabels
-from classes.PrepareData import PrepareData, splitDataset, createDataLoader
+from classes.CreateModel import createNewCNN, load_checkpoint, createLossFunction, createOptimizer, createScheduler
+from classes.Operations import train_labeled, val_labeled, test_labeled, evalModel, defineOperators, create_pseudolabels
+from classes.PrepareData import PrepareData, splitDataset, createDataLoader, ConcatDataset
 from medmnist.info import INFO
+from functions.dataset_pseudo import PathMNIST, ChestMNIST, DermaMNIST, OCTMNIST, PneumoniaMNIST, RetinaMNIST, \
+    BreastMNIST, OrganMNISTAxial, OrganMNISTCoronal, OrganMNISTSagittal
 
 
 def main(dataset_name,
@@ -116,20 +118,21 @@ def main(dataset_name,
     val_transform = prepareClass.createTransform(image_size=32, augmentations=augmentations)
     test_transform = prepareClass.createTransform(image_size=32, augmentations=augmentations)
     
-    train_dataset, train_dataset_labeled, train_indices_labeled, train_dataset_unlabeled, train_indices_unlabeled = prepareClass.prepareDataSet('train', train_transform, train_size)
-    train_loader_labeled   = createDataLoader(train_dataset_labeled, batch_size)
-    train_loader_unlabeled = createDataLoader(train_dataset_unlabeled, batch_size)
+    train_dataset, train_subset_labeled, train_dataset_labeled, train_subset_unlabeled, train_dataset_unlabeled = prepareClass.prepareDataSet('train', train_transform, train_size)
+    train_loader_labeled   = createDataLoader(train_subset_labeled, batch_size)
+    if len(train_dataset_unlabeled)>0:
+        train_loader_unlabeled = createDataLoader(train_subset_unlabeled, batch_size)
     #print(len(train_loader_labeled), len(train_loader_unlabeled))
     
-    val_dataset, val_dataset_labeled, val_indices_labeled, val_dataset_unlabeled, val_indices_unlabeled = prepareClass.prepareDataSet('val', val_transform, 1)
-    val_loader_labeled   = createDataLoader(val_dataset_labeled, batch_size)
-    #val_loader_unlabeled = createDataLoader(val_dataset_unlabeled, batch_size)
+    val_dataset, val_subset_labeled, val_dataset_labeled, val_subset_unlabeled, val_dataset_unlabeled = prepareClass.prepareDataSet('val', val_transform, 1)
+    val_loader_labeled   = createDataLoader(val_subset_labeled, batch_size)
+    #val_loader_unlabeled = createDataLoader(val_subset_unlabeled, batch_size)
 
-    test_dataset, test_dataset_labeled, test_indices_labeled, test_dataset_unlabeled, test_indices_unlabeled = prepareClass.prepareDataSet('test', test_transform, 1)
-    test_loader_labeled   = createDataLoader(test_dataset_labeled, batch_size)
-    #test_loader_unlabeled = createDataLoader(test_dataset_unlabeled, batch_size)
+    test_dataset, test_subset_labeled, test_dataset_labeled, test_subset_unlabeled, test_dataset_unlabeled = prepareClass.prepareDataSet('test', test_transform, 1)
+    test_loader_labeled   = createDataLoader(test_subset_labeled, batch_size)
+    #test_loader_unlabeled = createDataLoader(test_subset_unlabeled, batch_size)
     
-    print('Train: ', len(train_dataset_labeled), ', Valid: ', len(val_dataset), ', Test: ', len(test_dataset))
+    print('Train: ', len(train_subset_labeled), ', Valid: ', len(val_subset_labeled), ', Test: ', len(test_subset_labeled))
 
 
 
@@ -143,12 +146,16 @@ def main(dataset_name,
         for epoch in trange(start_epoch, num_epoch):
             model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
             epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, dir_path, epoch, auc_old, epoch_old, loss, device)
+            auc_old = auc
+            epoch_old = epoch
         auc_list = np.array(val_auc_list)
         index = auc_list.argmax()
         print('epoch %s is the best model' % (index))
-
+        
+        savepath = os.path.join(dir_path, inputs['dataset'] + '%.2f' % train_size + "_bestmodel.pth")
+        torch.save(model.state_dict(), savepath)
         # evaluate model
-        saveBestModel(dir_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+        evalModel(dir_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
             
     
     elif task_input == "NoisyStudent":
@@ -157,76 +164,141 @@ def main(dataset_name,
     elif task_input == "MTSS":
         print("==> MTSS-Training...")
 
+# ************************************** PseudoLabeling  *************************************************************************************************
     elif task_input == "Pseudolabel":
         print("==> Pseudolabel-Training...")
 
-        for i in range(count_students+1):
+        labeled_inputs = []
+        labeled_targets = []  
+        for batch_idx, (train_inputs, train_targets) in enumerate(train_loader_labeled):
+            for image in train_inputs:
+                labeled_inputs.append(image.reshape(28,28))
+            for tupl in train_targets:
+                labeled_targets.append(np.argmax(tupl))
+            
+        labeled_inputs = torch.stack(labeled_inputs)
+        labeled_targets = np.reshape(torch.stack(labeled_targets), (-1,1)).tolist()
+
+        # ************************************** Create Models  *****************************************
+        # load trainer model
+        if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
+            list_of_files = glob.glob(dir_path + "/*.pth")
+            latest_file = max(list_of_files, key=os.path.getctime)
+            start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, train_loader_labeled, dir_path, inputs, device)
+            #model, optimizer, scheduler, loss, start_epoch, val_auc_list = load_checkpoint(model, optimizer, scheduler, latest_file)
+
+        for i in range(count_students):
             val_auc_list = []
             epoch_old = 0
             auc_old = 0
             loss = 0
             start_epoch = 0
-            if i == 0: # first train teacher model
-
-                if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
-                    list_of_files = glob.glob(dir_path + "/*.pth")
-                    latest_file = max(list_of_files, key=os.path.getctime)
-                    filename = latest_file
-                    net_create = CreateModel(n_channels, n_classes, device)
-                    start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, train_loader_labeled, dir_path, inputs, device)
-                    model, optimizer, scheduler, loss, start_epoch, val_auc_list = net_create.load_checkpoint(model, optimizer, scheduler, filename)
-                    
-                else:
-                    # creating model
-                    start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, train_loader_labeled, dir_path, inputs, device)
-                    # training model
-                    print("==> Training teacher model...")
-                    for epoch in trange(start_epoch, num_epoch):
-                        model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
-                        epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, dir_path, epoch, auc_old, epoch_old, loss, device)
-                        auc_old = auc
-                        epoch_old = epoch
-                    auc_list = np.array(val_auc_list)
-                    index = auc_list.argmax()
-                    print('epoch %s is the best model' % (index))
-
-                    # evaluate model
-                    saveBestModel(dir_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+            # start pseudolabeling with teacher model
+            print("==> PseudoLabeling...")
             
-            else:
-                student_path = os.path.join(dir_path, "training_"+ str(i))
-                # create pseudo labels
-                pseudolabeled_dataloader = create_pseudolabels(model, train_dataset_unlabeled, train_loader_unlabeled, batch_size, device)
+            #test_labeled('train', model, train_loader_labeled, flag, train_size, task, device, output_root=None)
+            
+            pseudo_inputs, pseudo_targets = create_pseudolabels(model, train_dataset_unlabeled, train_loader_unlabeled, batch_size, task, device)
+            
+
+            combined_inputs = np.concatenate((np.asarray(labeled_inputs), np.asarray(pseudo_inputs))) 
+            combined_targets = np.concatenate((np.asarray(labeled_targets), np.asarray(pseudo_targets)))
+            np.savez(os.path.join(dir_path, 'combined_' + inputs['dataset'] +'.npz'), inputs=combined_inputs, targets=combined_targets)
+            combined_inputs = torch.from_numpy(combined_inputs)
+            combined_targets = torch.from_numpy(combined_targets)
+
+            pseudo_dataset = data.TensorDataset(combined_inputs, combined_targets)
+            combined_dataloader = data.DataLoader(dataset=pseudo_dataset, batch_size=batch_size, shuffle=True)
+
+            # create student model
+            model, image_size = createNewCNN(inputs['net_input'], n_channels, n_classes, device)
+            criterion = createLossFunction(inputs['loss_function'])
+            optimizer = createOptimizer(inputs['optimizer'], model, inputs['momentum'], inputs['weight_decay'], inputs['lr'])
+            scheduler = createScheduler(optimizer, len(combined_dataloader), inputs['milestone_count'], inputs['decayLr'])
+
+            #training model
+            student_path = os.path.join(dir_path, "training_"+ str(i))
+            os.mkdir(student_path)
+            for epoch in trange(start_epoch, num_epoch):
+                model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
+                epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, student_path, epoch, auc_old, epoch_old, loss, device)
+                auc_old = auc
+                epoch_old = epoch
+            auc_list = np.array(val_auc_list)
+            index = auc_list.argmax()
+            print('epoch %s is the best model' % (index))
+            
+            # evaluate model
+            evalModel(student_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+            
+
+        # for i in range(count_students+1):
+        #     val_auc_list = []
+        #     epoch_old = 0
+        #     auc_old = 0
+        #     loss = 0
+        #     start_epoch = 0
+        #     if i == 0: # first train teacher model
+
+        #         if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
+        #             list_of_files = glob.glob(dir_path + "/*.pth")
+        #             latest_file = max(list_of_files, key=os.path.getctime)
+        #             filename = latest_file
+        #             net_create = CreateModel(n_channels, n_classes, device)
+        #             start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, train_loader_labeled, dir_path, inputs, device)
+        #             model, optimizer, scheduler, loss, start_epoch, val_auc_list = net_create.load_checkpoint(model, optimizer, scheduler, filename)
+                    
+        #         else:
+        #             # creating model
+        #             start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, train_loader_labeled, dir_path, inputs, device)
+        #             # training model
+        #             print("==> Training teacher model...")
+        #             for epoch in trange(start_epoch, num_epoch):
+        #                 model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
+        #                 epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, dir_path, epoch, auc_old, epoch_old, loss, device)
+        #                 auc_old = auc
+        #                 epoch_old = epoch
+        #             auc_list = np.array(val_auc_list)
+        #             index = auc_list.argmax()
+        #             print('epoch %s is the best model' % (index))
+
+        #             # evaluate model
+        #             saveBestModel(dir_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+            
+        #     else:
+        #         student_path = os.path.join(dir_path, "training_"+ str(i))
+        #         # create pseudo labels
+        #         pseudolabeled_dataloader = create_pseudolabels(model, train_dataset_unlabeled, train_loader_unlabeled, batch_size, device)
                  
-                if train_teacher_dependent == False:
-                    # create operators
-                    start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, pseudolabeled_dataloader, student_path, inputs, device)
+        #         if train_teacher_dependent == False:
+        #             # create operators
+        #             start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old = defineOperators(n_channels, n_classes, pseudolabeled_dataloader, student_path, inputs, device)
                
-                    # training model
-                    print("==> Training student on labeled Data...")
-                    for epoch in trange(start_epoch, num_epoch):
-                        model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
-                        epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, student_path, epoch, auc_old, epoch_old, loss, device)
-                        auc_old = auc
-                        epoch_old = epoch
+        #             # training model
+        #             print("==> Training student on labeled Data...")
+        #             for epoch in trange(start_epoch, num_epoch):
+        #                 model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, train_loader_labeled, task, device)
+        #                 epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, student_path, epoch, auc_old, epoch_old, loss, device)
+        #                 auc_old = auc
+        #                 epoch_old = epoch
 
-                val_auc_list = []
-                epoch_old = 0
-                auc_old = 0
-                loss = 0
-                start_epoch = 0
-                print("==> Training student on pseudolabeled Data...")
-                for epoch in trange(start_epoch, num_epoch):
-                    model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, pseudolabeled_dataloader, task, device)
-                    epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, student_path, epoch, auc_old, epoch_old, loss, device)
-                    auc_old = auc
-                    epoch_old = epoch
-                auc_list = np.array(val_auc_list)
-                index = auc_list.argmax()
-                print('epoch %s is the best model' % (index))
+        #         val_auc_list = []
+        #         epoch_old = 0
+        #         auc_old = 0
+        #         loss = 0
+        #         start_epoch = 0
+        #         print("==> Training student on pseudolabeled Data...")
+        #         for epoch in trange(start_epoch, num_epoch):
+        #             model, optimizer, criterion, loss = train_labeled(model, optimizer, criterion, pseudolabeled_dataloader, task, device)
+        #             epoch, auc = val_labeled(model, optimizer, scheduler, val_loader_labeled, task, val_auc_list, student_path, epoch, auc_old, epoch_old, loss, device)
+        #             auc_old = auc
+        #             epoch_old = epoch
+        #         auc_list = np.array(val_auc_list)
+        #         index = auc_list.argmax()
+        #         print('epoch %s is the best model' % (index))
 
-                # evaluate model
-                saveBestModel(student_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+        #         # evaluate model
+        #         saveBestModel(student_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
     
     
                 
