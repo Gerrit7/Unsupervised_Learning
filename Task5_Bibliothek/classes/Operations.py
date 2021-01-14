@@ -47,7 +47,6 @@ def defineOperators(n_channels, n_classes, dataloader, dir_path, inputs, device)
     return start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old
 
 def train_labeled(model, optimizer, criterion, train_loader, task, device):
-
     model.train()
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         optimizer.zero_grad()
@@ -278,61 +277,48 @@ def evalModel(dir_path, model, train_loader, val_loader, test_loader, task, auc_
     #shutil.rmtree(dir_path)
 
 
-
-def create_pseudolabels(model, dataset, loader, batch_size, task, device):
-    
-    model.eval()
-    results = np.zeros((len(dataset), 10), dtype=np.float32)
-    input_return = []
-    target_return = []
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(loader): 
-            outputs = model(inputs.to(device))
-
-            if task == 'multi-label, binary-class':
-                #targets = targets.to(torch.float32).to(device)
-                m = nn.Sigmoid()
-                outputs = m(outputs).to(device)
-            else:
-                #targets = targets.squeeze().long().to(device)
-                m = nn.Softmax(dim=1)
-                outputs = m(outputs).to(device)
-                #targets = targets.float().resize_(len(targets), 1)
-            print(outputs)
-            result = outputs.cpu().detach().numpy().tolist()
-            
-            for image in inputs:
-                input_return.append(image.reshape(28,28))
-            for tupl in result:
-                target_return.append(np.argmax(tupl))
-                #print("prog: ", np.argmax(tupl))
-            #print("output: ", outputs)
-            #print("real: ", targets)
-            
-    input_return = torch.stack(input_return)
-
-    return input_return.tolist(), np.reshape(target_return, (-1,1)).tolist()
-
+# Pseudo Labeling Data
 def step(inputs, model, device):
-    data, _ = inputs # ignore label
+    data, targets = inputs # ignore label
     outputs = model(data.to(device))
     _, preds = torch.max(outputs.data , 1)
-    # preds, outputs  are cuda tensors. Right?
-    return preds, outputs, data
+    return preds, outputs, data, targets
 
-def predict(dataloader, model, device):
+def hardlabels(dataloader, model, task, device, takethres=0.95):
+    # for i in range(len(dataloader.dataset)):
+    #     print(dataloader.dataset[i][1])
     num_elements = len(dataloader.dataset)
+    print("length of data in pseudo-labeling dataloader: ", num_elements)
     num_batches = len(dataloader)
     batch_size = dataloader.batch_size
+
     predictions = torch.zeros(num_elements)
     images = torch.zeros(num_elements, 1, 28, 28)
+    labels = torch.zeros(num_elements)
+
+    auc = 0
     for i, batch in enumerate(dataloader):
         start = i*batch_size
         end = start + batch_size
         if i == num_batches - 1:
             end = num_elements
-        pred, output, data = step(batch, model, device)
-        predictions[start:end] = pred
+        prediction, output, data, targets = step(batch, model, device)
+
+        predictions[start:end] = prediction
+        labels[start:end] = targets.reshape(end-start)
         images[start:end] = data
+        
+        m = nn.Softmax(dim=1)
+        #print(m(output).to(device))
+
+        # print(predictions)
+        # print(labels)
+        # print(predictions.size())
+        # print(labels.size())
+        # print(images.size())
+    # get data where pred is > takethres
+    y_true = torch.tensor([]).to(device)
+    y_score = torch.tensor([]).to(device)
+    print("correct labeled targets: ", accuracy_score(labels, predictions)*100, "%")
 
     return images, predictions

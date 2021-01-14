@@ -83,13 +83,12 @@ class PrepareData:
             "organmnist_sagittal": OrganMNISTSagittal,
         }
         DataClass = flag_to_class[self.flag]
-        data_labeled = []
-        data_unlabeled = []
 
         dataset = DataClass(root=self.input_root,
                             split=split,
                             transform=transform,
                             download=self.download)
+
         indices_labeled = int(math.ceil(len(dataset)*split_size))
         indices_unlabeled = int(math.floor(len(dataset)*(1-split_size)))
         
@@ -98,6 +97,12 @@ class PrepareData:
 
         dataset_labeled = [dataset[i] for i in indices_labeled]
         dataset_unlabeled = [dataset[i] for i in indices_unlabeled]
+
+        # print("dataset: type: ", type(dataset), "length: ", len(dataset))
+        # print("subset_labeled: type: ", type(subset_labeled), "length: ", len(subset_labeled))
+        # print("dataset_labeled: type: ", type(dataset_labeled), "length: ", len(dataset_labeled))
+        # print("subset_unlabeled: type: ", type(subset_unlabeled), "length: ", len(subset_unlabeled))
+        # print("dataset_unlabeled: type: ", type(dataset_unlabeled), "length: ", len(dataset_unlabeled))
         
         return dataset, subset_labeled, dataset_labeled, subset_unlabeled, dataset_unlabeled
 

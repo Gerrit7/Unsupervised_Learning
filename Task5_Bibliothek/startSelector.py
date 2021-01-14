@@ -157,7 +157,7 @@ data_name = []
 
 root = tk.Tk()
 root.title('CNN Selector')
-root.geometry("1035x600")
+root.geometry("1200x600")
 
 D1_var = StringVar()
 D2_var = StringVar()
