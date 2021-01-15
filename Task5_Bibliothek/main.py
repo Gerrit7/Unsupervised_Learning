@@ -11,6 +11,7 @@ import math
 import numpy as np
 from pathlib import Path
 import sys
+import csv
 import torch
 from torch.nn import functional as F
 import torch.nn as nn
@@ -159,7 +160,7 @@ def main(dataset_name,
         savepath = os.path.join(dir_path, inputs['dataset'] + '%.2f' % train_size + "_bestmodel.pth")
         torch.save(model.state_dict(), savepath)
         # evaluate model
-        evalModel(dir_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+        auc_train, acc_train, auc_val, acc_val, auc_test, acc_test = evalModel(dir_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
             
     
     elif task_input == "NoisyStudent":
@@ -196,7 +197,7 @@ def main(dataset_name,
         else:
             sys.exit("No teacher net is pretrained!")
 
-        for i in range(count_students):
+        for student_number in range(count_students):
             val_auc_list = []
             epoch_old = 0
             auc_old = 0
@@ -204,7 +205,7 @@ def main(dataset_name,
             start_epoch = 0
             
             # start pseudolabeling with teacher model
-            pseudo_inputs, pseudo_targets = hardlabels(train_loader_unlabeled, model, task, device)
+            thresh_inputs, comp_preds, thresh_preds, comp_targets, thresh_targets = hardlabels(train_loader_unlabeled, model, task, device)
             
             # print(type(pseudo_inputs))
             # print(pseudo_inputs.size())
@@ -216,8 +217,8 @@ def main(dataset_name,
             # print(type(labeled_targets))
             # print(labeled_targets.size())
 
-            combined_inputs = np.concatenate((np.asarray(labeled_inputs), np.asarray(pseudo_inputs))) 
-            combined_targets = np.concatenate((np.asarray(labeled_targets), np.asarray(pseudo_targets)))
+            combined_inputs = np.concatenate((np.asarray(labeled_inputs), np.asarray(thresh_inputs))) 
+            combined_targets = np.concatenate((np.asarray(labeled_targets), np.asarray(thresh_targets)))
             combined_inputs = torch.from_numpy(combined_inputs)
             combined_targets = torch.from_numpy(combined_targets)
             #np.savez(os.path.join(dir_path, 'combined_' + inputs['dataset'] +'.npz'), inputs=combined_inputs, targets=combined_targets)
@@ -232,7 +233,9 @@ def main(dataset_name,
             scheduler = createScheduler(optimizer, len(combined_dataloader), inputs['milestone_count'], inputs['decayLr'])
 
             #training model
-            student_path = os.path.join(dir_path, "training_"+ str(i))
+            student_path = os.path.join(dir_path, "training_"+ str(student_number))
+            if os.path.isdir(student_path) == True:
+                shutil.rmtree(student_path)  
             os.mkdir(student_path)
             num_elements = len(combined_dataloader.dataset)
             print("length of data in training dataloader: ", num_elements)
@@ -246,7 +249,39 @@ def main(dataset_name,
             print('epoch %s is the best model' % (index))
             
             # evaluate model
-            evalModel(student_path, model, train_loader_labeled, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+            auc_train, acc_train, auc_val, acc_val, auc_test, acc_test = evalModel(student_path, model, combined_dataloader, val_loader_labeled, test_loader_labeled, task, auc_list, index, inputs, device)
+
+            if not os.path.exists(student_path):
+                os.mkdir(student_path)
             
+            file_exists = os.path.isfile(os.path.join(dir_path, 'results.csv'))
+            with open(os.path.join(dir_path, 'results.csv'), 'a+', newline='') as csvfile:
+                fieldnames = [  'training number', 
+                                'labeled data', 
+                                'count of labeled data',
+                                'labeling accuracy complete',
+                                'labeling accuracy threshold',
+                                'AUC Train', 
+                                'ACC Train',
+                                'AUC Validation', 
+                                'ACC Validation',
+                                'AUC Test', 
+                                'ACC Test']
+                
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                if not file_exists:
+                    writer.writeheader()  # file doesn't exist yet, write a header
+                writer.writerow({   'training number': student_number, 
+                                    'labeled data': train_size,
+                                    'count of labeled data': [len(thresh_preds), "/" ,len(comp_preds)],
+                                    'labeling accuracy complete': accuracy_score(comp_targets, comp_preds),
+                                    'labeling accuracy threshold' : accuracy_score(thresh_targets, thresh_preds),
+                                    'AUC Train': auc_train, 
+                                    'ACC Train': acc_train,
+                                    'AUC Validation': auc_val, 
+                                    'ACC Validation': auc_val,
+                                    'AUC Test': auc_test, 
+                                    'ACC Test': acc_test})
+
 
        

@@ -11,6 +11,8 @@ from sklearn.metrics import accuracy_score, roc_auc_score
 from torch.nn import functional as F
 from tqdm import trange
 
+import cv2
+import matplotlib.pyplot as plt
 
 from classes.PrepareData import createDataLoader
 from classes.CreateModel import createNewCNN, load_checkpoint, createLossFunction, createOptimizer, createScheduler
@@ -170,6 +172,7 @@ def test_labeled(split, model, data_loader, flag, split_size, task, device, outp
             output_path = os.path.join(output_dir, '%s.csv' % (split))
             save_results(y_true, y_score, output_path)
 
+    return auc, acc
 
 
 def getAUC(y_true, y_score, task):
@@ -267,24 +270,36 @@ def evalModel(dir_path, model, train_loader, val_loader, test_loader, task, auc_
     #restore_model_path = os.path.join(dir_path,)
     
     model.load_state_dict(torch.load(restore_model_path)['net'])
-    test_labeled('train', model, train_loader, inputs['dataset'], inputs['train_size'], task, device, output_root=inputs['output_root'])
-    test_labeled('val', model, val_loader, inputs['dataset'],  inputs['train_size'], task, device, output_root=inputs['output_root'])
-    test_labeled('test', model, test_loader, inputs['dataset'],  inputs['train_size'], task, device, output_root=inputs['output_root'])
+    auc_train, acc_train = test_labeled('train', model, train_loader, inputs['dataset'], inputs['train_size'], task, device, output_root=inputs['output_root'])
+    auc_val, acc_val = test_labeled('val', model, val_loader, inputs['dataset'],  inputs['train_size'], task, device, output_root=inputs['output_root'])
+    auc_test, acc_test = test_labeled('test', model, test_loader, inputs['dataset'],  inputs['train_size'], task, device, output_root=inputs['output_root'])
         
     # save_best_model_path = os.path.join( 
     #     os.path.join(inputs['output_root'], inputs['dataset'] + "_" + str('%.2f' % ['train_size'])), 'ckpt_%d_auc_%.5f.pth' % (index, auc_list[index]))
     # copyfile(restore_model_path, save_best_model_path)
     #shutil.rmtree(dir_path)
 
+    return auc_train, acc_train, auc_val, acc_val, auc_test, acc_test
 
 # Pseudo Labeling Data
 def step(inputs, model, device):
+    m = nn.Softmax(dim=1)
     data, targets = inputs # ignore label
-    outputs = model(data.to(device))
-    _, preds = torch.max(outputs.data , 1)
-    return preds, outputs, data, targets
+    outputs = m(model(data.to(device)))
+    vals , preds = torch.max(outputs.data , 1)
 
-def hardlabels(dataloader, model, task, device, takethres=0.95):
+
+    for i in range(len(data)):
+        print("shape: ", data[i][0].size())
+        plt.figure()
+        plt.imshow(data[i][0])
+        print(targets[i])
+        print(preds[i])
+        input("Bitte Enter drücken!")
+
+    return vals, preds, data, targets
+
+def hardlabels(dataloader, model, task, device, image_size = 28, takethres=0.98):
     # for i in range(len(dataloader.dataset)):
     #     print(dataloader.dataset[i][1])
     num_elements = len(dataloader.dataset)
@@ -293,8 +308,12 @@ def hardlabels(dataloader, model, task, device, takethres=0.95):
     batch_size = dataloader.batch_size
 
     predictions = torch.zeros(num_elements)
-    images = torch.zeros(num_elements, 1, 28, 28)
+    images = torch.zeros(num_elements, 1, image_size, image_size)
     labels = torch.zeros(num_elements)
+    
+    predictions_thresh = torch.tensor([]).to(device)
+    images_thresh = torch.tensor([])
+    labels_thresh = torch.tensor([])
 
     auc = 0
     for i, batch in enumerate(dataloader):
@@ -302,23 +321,31 @@ def hardlabels(dataloader, model, task, device, takethres=0.95):
         end = start + batch_size
         if i == num_batches - 1:
             end = num_elements
-        prediction, output, data, targets = step(batch, model, device)
-
-        predictions[start:end] = prediction
-        labels[start:end] = targets.reshape(end-start)
-        images[start:end] = data
+        vals, hardlabels, data, targets = step(batch, model, device)
         
-        m = nn.Softmax(dim=1)
-        #print(m(output).to(device))
+        predictions[start:end] = hardlabels
+        images[start:end] = data
+        labels[start:end] = targets.reshape(end-start)
 
         # print(predictions)
         # print(labels)
         # print(predictions.size())
         # print(labels.size())
         # print(images.size())
-    # get data where pred is > takethres
-    y_true = torch.tensor([]).to(device)
-    y_score = torch.tensor([]).to(device)
-    print("correct labeled targets: ", accuracy_score(labels, predictions)*100, "%")
 
-    return images, predictions
+    # get data where pred is > takethres
+        indices = [idx for idx,value in enumerate(vals.tolist()) if value > takethres]
+        predictions_thresh = torch.cat((predictions_thresh, hardlabels[indices]), 0)
+        images_thresh = torch.cat((images_thresh, data[indices]), 0)
+        labels_thresh = torch.cat((labels_thresh, labels[indices]), 0)
+    
+    # print(labels)
+    # print(predictions)
+    # print(labels_thresh)
+    # print(predictions_thresh)
+
+    print("predictions greater than threshold :", len(predictions_thresh), "/" ,len(predictions))
+    print("correct labeled targets without threshold: ", accuracy_score(labels, predictions)*100, "%")
+    print("correct labeled targets with threshold: ", accuracy_score(labels_thresh, predictions_thresh.to(torch.device("cpu")))*100, "%")
+
+    return images_thresh, predictions, predictions_thresh.to(torch.device("cpu")), labels, labels_thresh
