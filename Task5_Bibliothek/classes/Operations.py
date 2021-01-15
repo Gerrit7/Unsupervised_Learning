@@ -293,8 +293,11 @@ def step(inputs, model, device):
         print("shape: ", data[i][0].size())
         plt.figure()
         plt.imshow(data[i][0])
+        plt.show()
         print(targets[i])
         print(preds[i])
+        print(outputs[i])
+        print(vals[i])
         input("Bitte Enter drücken!")
 
     return vals, preds, data, targets
