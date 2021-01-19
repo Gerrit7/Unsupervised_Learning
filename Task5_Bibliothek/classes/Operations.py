@@ -26,11 +26,11 @@ def defineOperators(n_channels, n_classes, dataloader, dir_path, inputs, device)
 
     # check wheather a training session has already startet for this dataset
     if os.path.isdir(dir_path) and len(os.listdir(dir_path)) != 0:
-        list_of_files = glob.glob(dir_path + "/*.pth")
+        list_of_files = glob.glob(dir_path + "/ckpt*.pth")
         latest_file = max(list_of_files, key=os.path.getctime)
         filename = latest_file
         model, optimizer, scheduler, loss, start_epoch, val_auc_list = load_checkpoint(model, optimizer, scheduler, filename)
-        epoch_old = start_epoch-1
+        epoch_old = start_epoch
         auc_old = val_auc_list[-1]
     else:
         if not os.path.exists(dir_path):
@@ -38,6 +38,7 @@ def defineOperators(n_channels, n_classes, dataloader, dir_path, inputs, device)
         start_epoch = 0
         epoch_old = 0
         auc_old = 0
+        val_auc_list = []
 
     # push optimizer and model to device (cpu/gpu)
     for state in optimizer.state.values():
@@ -46,7 +47,7 @@ def defineOperators(n_channels, n_classes, dataloader, dir_path, inputs, device)
                 state[k] = v.to(device)
     model.to(device)
 
-    return start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old
+    return start_epoch, model, criterion, optimizer, scheduler, epoch_old, auc_old, val_auc_list
 
 def train_labeled(model, optimizer, criterion, train_loader, task, device):
     model.train()
@@ -282,38 +283,45 @@ def evalModel(dir_path, model, train_loader, val_loader, test_loader, task, auc_
     return auc_train, acc_train, auc_val, acc_val, auc_test, acc_test
 
 # Pseudo Labeling Data
-def step(inputs, model, device):
+def step(data, model, device, showImage=False):
+    
     m = nn.Softmax(dim=1)
-    data, targets = inputs # ignore label
-    outputs = m(model(data.to(device)))
-    vals , preds = torch.max(outputs.data , 1)
+    outputs = m(model(data.to(device)))   
 
+    if showImage == True:
+        for i in range(len(data)):
+            plt.figure()
+            plt.imshow(data[i][0])
+            plt.show()
+            input("Press enter to continue!")
+            plt.close()
+    return outputs
 
-    for i in range(len(data)):
-        print("shape: ", data[i][0].size())
-        plt.figure()
-        plt.imshow(data[i][0])
-        plt.show()
-        print(targets[i])
-        print(preds[i])
-        print(outputs[i])
-        print(vals[i])
-        input("Bitte Enter drücken!")
-
-    return vals, preds, data, targets
-
-def hardlabels(dataloader, model, task, device, image_size = 28, takethres=0.98):
+def hardlabels(dataloader, model, device, info, image_size = 28, pos_thresh=0.7, neg_thresh = 0.05):
     # for i in range(len(dataloader.dataset)):
     #     print(dataloader.dataset[i][1])
+    task = info['task']
+    n_channels = info['n_channels']
+    n_classes = len(info['label'])
     num_elements = len(dataloader.dataset)
-    print("length of data in pseudo-labeling dataloader: ", num_elements)
     num_batches = len(dataloader)
     batch_size = dataloader.batch_size
+    print("length of data in pseudo-labeling dataloader: ", num_elements)
 
-    predictions = torch.zeros(num_elements)
-    images = torch.zeros(num_elements, 1, image_size, image_size)
-    labels = torch.zeros(num_elements)
+    if task == 'multi-label, binary-class' or  task == 'binary_class':
+        predictions = torch.zeros(num_elements, n_classes).to(device)
+        images = torch.zeros(num_elements, n_channels, image_size, image_size)
+        labels = torch.zeros(num_elements, n_classes)
+    else:
+        predictions = torch.zeros(num_elements, 1).to(device)
+        images = torch.zeros(num_elements, n_channels, image_size, image_size)
+        labels = torch.zeros(num_elements, 1)
+    # predictions = torch.tensor([]).to(device)
+    # images = torch.tensor([])
+    # labels = torch.tensor([])
+
     
+
     predictions_thresh = torch.tensor([]).to(device)
     images_thresh = torch.tensor([])
     labels_thresh = torch.tensor([])
@@ -324,31 +332,60 @@ def hardlabels(dataloader, model, task, device, image_size = 28, takethres=0.98)
         end = start + batch_size
         if i == num_batches - 1:
             end = num_elements
-        vals, hardlabels, data, targets = step(batch, model, device)
+        data, targets = batch
+        outputs = step(data, model, device)
         
-        predictions[start:end] = hardlabels
-        images[start:end] = data
-        labels[start:end] = targets.reshape(end-start)
+        if task == 'multi-label, binary-class' or 'binary_class':
+            pos_thresh = 0.5
+            taken_preds = ((outputs>pos_thresh) + (outputs<neg_thresh))*1
+            vals , hardlabels = torch.max(outputs.data , 1)
+            hardlabels = hardlabels.reshape(end-start, 1)
+        else:
+            taken_preds = ((outputs>pos_thresh) + (outputs<neg_thresh))*1
+            hardlabels = ((outputs>pos_thresh))*1
 
-        # print(predictions)
-        # print(labels)
-        # print(predictions.size())
-        # print(labels.size())
-        # print(images.size())
-
-    # get data where pred is > takethres
-        indices = [idx for idx,value in enumerate(vals.tolist()) if value > takethres]
+        indices = [idx for idx,value in enumerate(taken_preds.tolist()) if np.asarray(taken_preds.to(torch.device("cpu")))[idx].all()]
+        bad_indices = [idx for idx,value in enumerate(taken_preds.tolist()) if not np.asarray(taken_preds.to(torch.device("cpu")))[idx].all()]
+        
         predictions_thresh = torch.cat((predictions_thresh, hardlabels[indices]), 0)
         images_thresh = torch.cat((images_thresh, data[indices]), 0)
-        labels_thresh = torch.cat((labels_thresh, labels[indices]), 0)
-    
-    # print(labels)
-    # print(predictions)
-    # print(labels_thresh)
-    # print(predictions_thresh)
+        labels_thresh = torch.cat((labels_thresh, targets[indices]), 0)
+
+        # print("Outputs: ", outputs.size(), outputs)
+        # print("Hardlabels: ", hardlabels.size(),hardlabels)
+        # print("Targets: ", targets.size(),targets)
+        # print("Indices: ", len(indices),indices)
+        # input("press enter!")
+        predictions[start:end] = hardlabels
+        images[start:end] = data
+        labels[start:end] = targets
+
+        # print("correct labeled targets without threshold: ", accuracy_score(targets.to(torch.device("cpu")), hardlabels.to(torch.device("cpu")))*100, "%")
+        # print("correct labeled targets with threshold: ", get)
+        
+        # print(targets.size())
+        # print(hardlabels.size())
+        # print(targets[indices].size())
+        # print(hardlabels[indices].size())
+        # input("press enter!")
+
+        print("correct labeled targets without threshold: ", accuracy_score(targets.to(torch.device("cpu")), hardlabels.to(torch.device("cpu")))*100, "%")
+        print("correct labeled targets with threshold: ", accuracy_score(targets[indices].to(torch.device("cpu")), hardlabels[indices].to(torch.device("cpu")))*100, "%")
+
+
+
+    # print("Images: ", images.size())
+    # print("Labels: ", labels.size())
+    # print("Preds: ", predictions.size())
+
+    # print("Images Thresh: ", images_thresh.size())
+    # print("Labels Thresh: ", labels_thresh.size())
+    # print("Preds Thresh: ", predictions_thresh.size())
 
     print("predictions greater than threshold :", len(predictions_thresh), "/" ,len(predictions))
-    print("correct labeled targets without threshold: ", accuracy_score(labels, predictions)*100, "%")
-    print("correct labeled targets with threshold: ", accuracy_score(labels_thresh, predictions_thresh.to(torch.device("cpu")))*100, "%")
+    # print("correct labeled targets without threshold: ", getAUC(labels.to(torch.device("cpu")), predictions.to(torch.device("cpu")), task)*100, "%")
+    # print("correct labeled targets with threshold: ", getAUC(labels_thresh.to(torch.device("cpu")), predictions_thresh.to(torch.device("cpu")), task)*100, "%")
+    print("correct labeled targets without threshold: ", accuracy_score(labels.to(torch.device("cpu")), predictions.to(torch.device("cpu")))*100, "%")
+    print("correct labeled targets with threshold: ", accuracy_score(labels_thresh.to(torch.device("cpu")), predictions_thresh.to(torch.device("cpu")))*100, "%")
 
     return images_thresh, predictions, predictions_thresh.to(torch.device("cpu")), labels, labels_thresh
