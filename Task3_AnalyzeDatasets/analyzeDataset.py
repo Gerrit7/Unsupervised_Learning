@@ -9,6 +9,8 @@ from PrepareData import PrepareData, splitDataset, createDataLoader, ConcatDatas
 flags = ["octmnist", "pneumoniamnist", "pathmnist", "chestmnist","retinamnist", "dermamnist", "breastmnist", 
 "organmnist_coronal", "organmnist_sagittal", "organmnist_axial"]
 
+#flags = ["chestmnist"]
+
 augmentations = []
 batch_size = 128
 data_root = "../../DataSets/medmnist"
@@ -24,9 +26,15 @@ for flag in flags:
     info = INFO[flag]
     n_channels = info['n_channels']
     n_classes = len(info['label'])
+    labels = info['label']
     vars()[flag + "train_counter"] = np.zeros(n_classes)
     vars()[flag + "val_counter"] = np.zeros(n_classes)
     vars()[flag + "test_counter"] = np.zeros(n_classes)
+
+    if flag == "chestmnist":
+        vars()[flag + "train_counter_subclass"] = np.zeros(n_classes)
+        vars()[flag + "val_counter_subclass"] = np.zeros(n_classes)
+        vars()[flag + "test_counter_subclass"] = np.zeros(n_classes)
 
     prepareClass = PrepareData(flag, data_root, output_root, net_input, download=True)
     train_transform = prepareClass.createTransform(image_size=32, augmentations=augmentations)
@@ -50,39 +58,66 @@ for flag in flags:
     for batch_idx, (inputs, targets) in enumerate(train_loader_labeled):
         for value, target in zip(inputs, targets):
             vars()[flag + "train_counter"][target] +=1
-    print(flag, " Trainingsdaten: ", vars()[flag + "train_counter"])
-    print("Summe der Trainingsdaten: ", sum(vars()[flag + "train_counter"]))
+            if flag == "chestmnist":
+                for clas in range(n_classes):
+                    if target[clas] == 1:
+                        vars()[flag + "train_counter_subclass"][clas] += 1
+
+    # print(flag, " Trainingsdaten: ", vars()[flag + "train_counter"])
+    # print("Summe der Trainingsdaten: ", sum(vars()[flag + "train_counter"]))
 
     for batch_idx, (inputs, targets) in enumerate(val_loader_labeled):
         for value, target in zip(inputs, targets):
             vars()[flag + "val_counter"][target] +=1
-    print(flag, " Validierungsdaten: ", vars()[flag + "val_counter"])
-    print("Summe der Validierungssdaten: ", sum(vars()[flag + "val_counter"]))
+            if flag == "chestmnist":
+                for clas in range(n_classes):
+                    if target[clas] == 1:
+                        vars()[flag + "val_counter_subclass"][clas] += 1
+    # print(flag, " Validierungsdaten: ", vars()[flag + "val_counter"])
+    # print("Summe der Validierungssdaten: ", sum(vars()[flag + "val_counter"]))
 
     for batch_idx, (inputs, targets) in enumerate(test_loader_labeled):
         for value, target in zip(inputs, targets):
             vars()[flag + "test_counter"][target] +=1
-    print(flag, " Testdaten: ", vars()[flag + "test_counter"])
-    print("Summe der Testdaten: ", sum(vars()[flag + "test_counter"]))
+            if flag == "chestmnist":
+                for clas in range(n_classes):
+                    if target[clas] == 1:
+                        vars()[flag + "test_counter_subclass"][clas] += 1
+    # print(flag, " Testdaten: ", vars()[flag + "test_counter"])
+    # print("Summe der Testdaten: ", sum(vars()[flag + "test_counter"]))
 
 
     splits = ["train", "val", "test"]
+    
     # save results in csv file
-    file_exists = os.path.isfile(os.path.join(output_root, 'results.csv'))
+    file_exists = os.path.isfile(os.path.join(output_root, 'dataset_evaluation.csv'))
     with open(os.path.join(output_root, 'dataset_evaluation.csv'), 'a+', newline='') as csvfile:
         fieldnames = [  'dataset',
-                        'split', 
-                        'class', 
-                        'samples'
-                    ]
+                        'split']
+        for i in range(14):
+            fieldnames.append("class_name_" + str(i))
+            fieldnames.append("samples_"+ str(i))
+            
         
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         if not file_exists:
             writer.writeheader()  # file doesn't exist yet, write a header
+        
         for split in splits:
-            for class_num, samples in enumerate(vars()[flag + split + "_counter"]):
-                writer.writerow({   'dataset': flag, 
-                                    'split': split,
-                                    'class': class_num,
-                                    'samples': samples,
-                                })
+            dictionary = {
+                    'dataset': flag, 
+                    'split': split,
+                }
+            if flag == "chestmnist":
+                for class_num, samples in enumerate(vars()[flag + split + "_counter_subclass"]):
+                    dictionary['class_name_'+ str(class_num)] = labels[str(class_num)]
+                    dictionary['samples_'+ str(class_num)] = samples
+                    
+            
+            else:
+                for class_num, samples in enumerate(vars()[flag + split + "_counter"]):
+                    dictionary['class_name_'+ str(class_num)] = labels[str(class_num)]
+                    dictionary['samples_'+ str(class_num)] = samples
+                    
+
+            writer.writerow(dictionary)
