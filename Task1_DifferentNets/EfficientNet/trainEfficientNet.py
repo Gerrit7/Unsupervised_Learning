@@ -116,8 +116,7 @@ def main(flag, input_root, output_root, end_epoch, trainSize, download):
         cpu = torch.device("cpu")
     
     model = EfficientNet.from_name('efficientnet-b0')
-    print(model)
-    #model._conv_stem = Conv2dStaticSamePadding(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False, image_size =32)
+    model._conv_stem = Conv2dStaticSamePadding(n_channels, 32, kernel_size=(3, 3), stride=(2, 2), bias=False, image_size =32)
     model._fc= nn.Linear(1280, n_classes)
     model.to(device)
     

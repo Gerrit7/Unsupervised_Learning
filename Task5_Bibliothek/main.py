@@ -79,6 +79,9 @@ def main(dataset_name,
         task = info['task']
         n_channels = info['n_channels']
         n_classes = len(info['label'])
+        n_train = info['n_samples']['train']
+        n_val = info['n_samples']['val']
+        n_test = info['n_samples']['test']
         val_auc_list = []
         epoch_old = 0
         auc_old = 0
@@ -122,20 +125,35 @@ def main(dataset_name,
     val_transform = prepareClass.createTransform(image_size=32, augmentations=augmentations)
     test_transform = prepareClass.createTransform(image_size=32, augmentations=augmentations)
     
-    train_dataset, train_subset_labeled, train_dataset_labeled, train_subset_unlabeled, train_dataset_unlabeled = prepareClass.prepareDataSet('train', train_transform, train_size)
+    #train_dataset, train_subset_labeled, train_dataset_labeled, train_subset_unlabeled, train_dataset_unlabeled = prepareClass.prepareDataSet('train', train_transform, train_size)
+    train_dataset = prepareClass.prepareDataSet('train', train_transform, train_size)
+    train_loader   = createDataLoader(train_dataset, batch_size)
+    train_dataset_labeled, train_subset_labeled, train_dataset_unlabeled, train_subset_unlabeled = splitDataset(train_dataset, train_loader, n_classes, n_train, train_size, task)
+
     train_loader_labeled   = createDataLoader(train_subset_labeled, batch_size)
     if len(train_dataset_unlabeled)>0:
         train_loader_unlabeled = createDataLoader(train_subset_unlabeled, batch_size)
     
     #print(len(train_loader_labeled), len(train_loader_unlabeled))
     
-    val_dataset, val_subset_labeled, val_dataset_labeled, val_subset_unlabeled, val_dataset_unlabeled = prepareClass.prepareDataSet('val', val_transform, 1)
-    val_loader_labeled   = createDataLoader(val_subset_labeled, batch_size)
-    #val_loader_unlabeled = createDataLoader(val_subset_unlabeled, batch_size)
+    #val_dataset, val_subset_labeled, val_dataset_labeled, val_subset_unlabeled, val_dataset_unlabeled = prepareClass.prepareDataSet('val', val_transform, 1)
+    val_dataset = prepareClass.prepareDataSet('val', val_transform, 1)
+    val_loader   = createDataLoader(train_dataset, batch_size)
+    val_dataset_labeled, val_subset_labeled, val_dataset_unlabeled, val_subset_unlabeled = splitDataset(val_dataset, val_loader, n_classes, n_val, train_size, task)
 
-    test_dataset, test_subset_labeled, test_dataset_labeled, test_subset_unlabeled, test_dataset_unlabeled = prepareClass.prepareDataSet('test', test_transform, 1)
+    val_loader_labeled   = createDataLoader(val_subset_labeled, batch_size)
+    #if len(val_dataset_unlabeled)>0:
+        #val_loader_unlabeled = createDataLoader(val_subset_unlabeled, batch_size)
+
+    #test_dataset, test_subset_labeled, test_dataset_labeled, test_subset_unlabeled, test_dataset_unlabeled = prepareClass.prepareDataSet('test', test_transform, 1)
+    test_dataset = prepareClass.prepareDataSet('test', test_transform, 1)
+    test_loader   = createDataLoader(test_dataset, batch_size)
+    test_dataset_labeled, test_subset_labeled, test_dataset_unlabeled, test_subset_unlabeled = splitDataset(test_dataset, test_loader, n_classes, n_test, train_size, task)
+
+    
     test_loader_labeled   = createDataLoader(test_subset_labeled, batch_size)
-    #test_loader_unlabeled = createDataLoader(test_subset_unlabeled, batch_size)
+    #if len(test_dataset_unlabeled)>0:
+        #test_loader_unlabeled = createDataLoader(test_subset_unlabeled, batch_size)
     
     print('Train: ', len(train_subset_labeled), ', Valid: ', len(val_subset_labeled), ', Test: ', len(test_subset_labeled))
 

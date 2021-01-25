@@ -88,23 +88,23 @@ class PrepareData:
                             split=split,
                             transform=transform,
                             download=self.download)
-
-        indices_labeled = int(math.ceil(len(dataset)*split_size))
-        indices_unlabeled = int(math.floor(len(dataset)*(1-split_size)))
         
-        # changed random_split in torch.utils.data. dataset.py for returning indices
-        [subset_labeled, indices_labeled], [subset_unlabeled, indices_unlabeled] = torch.utils.data.random_split(dataset,[indices_labeled, indices_unlabeled])
+        # indices_labeled = int(math.ceil(len(dataset)*split_size))
+        # indices_unlabeled = int(math.floor(len(dataset)*(1-split_size)))
+        
+        # # changed random_split in torch.utils.data. dataset.py for returning indices
+        # [subset_labeled, indices_labeled], [subset_unlabeled, indices_unlabeled] = torch.utils.data.random_split(dataset,[indices_labeled, indices_unlabeled])
 
-        dataset_labeled = [dataset[i] for i in indices_labeled]
-        dataset_unlabeled = [dataset[i] for i in indices_unlabeled]
-
+        # dataset_labeled = [dataset[i] for i in indices_labeled]
+        # dataset_unlabeled = [dataset[i] for i in indices_unlabeled]
+        
         # print("dataset: type: ", type(dataset), "length: ", len(dataset))
         # print("subset_labeled: type: ", type(subset_labeled), "length: ", len(subset_labeled))
         # print("dataset_labeled: type: ", type(dataset_labeled), "length: ", len(dataset_labeled))
         # print("subset_unlabeled: type: ", type(subset_unlabeled), "length: ", len(subset_unlabeled))
         # print("dataset_unlabeled: type: ", type(dataset_unlabeled), "length: ", len(dataset_unlabeled))
         
-        return dataset, subset_labeled, dataset_labeled, subset_unlabeled, dataset_unlabeled
+        return dataset#, subset_labeled, dataset_labeled, subset_unlabeled, dataset_unlabeled
 
 
 def createDataLoader(data_in, batch_size):
@@ -114,16 +114,33 @@ def createDataLoader(data_in, batch_size):
 
     return data_loader
 
-def splitDataset(seq, num):
-    avg = len(seq) / float(num)
-    out = []
-    last = 0.0
+def splitDataset(dataset, data_loader, n_classes, n_train, train_size, task):
+    vars()["train_counter"] = np.zeros(n_classes)
+    vars()["train_class_list"] = []
+    for i in range(n_classes):
+        vars()["train_class_list"].append([])
 
-    while last < len(seq):
-        out.append(seq[int(last):int(last + avg)])
-        last += avg
+    for batch_idx, (inputs, targets) in enumerate(data_loader):
+            for file_idx, (value, target) in enumerate(zip(inputs, targets)):
+                vars()["train_counter"][target] +=1
+                vars()["train_class_list"][target].append(batch_idx+file_idx)
+                if task == 'multi-label, binary-class':
+                    for clas in range(n_classes):
+                        if target[clas] == 1:
+                            vars()["train_counter_subclass"][clas] += 1
 
-    return out
+    indices_labeled = []
+    indices_unlabeled = []
+    for class_list in range(n_classes):
+        random_samples = random.sample(vars()["train_class_list"][class_list], int((n_train * train_size)/n_classes))
+        indices_labeled = indices_labeled + random_samples
+        indices_unlabeled = indices_unlabeled + list(set(vars()["train_class_list"][class_list]) - set(random_samples)) 
+        
+    dataset_labeled = [data_loader.dataset[i] for i in indices_labeled]
+    subset_labeled = data.Subset(dataset, indices_labeled)
+    dataset_unlabeled = [data_loader.dataset[i] for i in indices_unlabeled]
+    subset_unlabeled = data.Subset(dataset, indices_unlabeled)
+    return dataset_labeled, subset_labeled, dataset_unlabeled, subset_unlabeled
 
 class ConcatDataset(torch.utils.data.Dataset):
     def __init__(self, *datasets):
@@ -134,3 +151,5 @@ class ConcatDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return min(len(d) for d in self.datasets)
+
+

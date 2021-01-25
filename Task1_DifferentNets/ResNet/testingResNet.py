@@ -44,7 +44,7 @@ def main(flag, dataset_root, model_root, trainSize, download):
 
     start_epoch = 0
     lr = 0.001
-    batch_size = 8 #128
+    batch_size = 128
     val_auc_list = []
     train_dataset_scaled = []
     epoch_old = 0
@@ -109,17 +109,19 @@ def main(flag, dataset_root, model_root, trainSize, download):
             device,
             flag,
             task,
+            len(train_dataset_scaled),
             output_root=model_root)
-    test(model, 'val', val_loader, device, flag, task, output_root=model_root)
+    test(model, 'val', val_loader, device, flag, task, len(train_dataset_scaled), output_root=model_root)
     test(model,
             'test',
             test_loader,
             device,
             flag,
             task,
+            len(train_dataset_scaled),
             output_root=model_root)
 
-def test(model, split, data_loader, device, flag, task, output_root=None):
+def test(model, split, data_loader, device, flag, task, train_len, output_root=None):
     ''' testing function
     :param model: the model to test
     :param split: the data to test, 'train/val/test'
@@ -136,6 +138,7 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
 
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(data_loader):
+            print(len(targets))
             outputs = model(inputs.to(device))
 
             if task == 'multi-label, binary-class':
@@ -160,7 +163,7 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
         file_exists = os.path.isfile('../../../TrainedNets/Training_Resnet18_self/results.csv')
         with open('../../../TrainedNets/Training_Resnet18_self/results.csv', 'a+', newline='') as csvfile:
             fieldnames = ['Datensatz', 'Prozent des Trainingssatzes', 'Train/Validation/Test',
-                            'AUC', 'ACC']
+                            'AUC', 'ACC', 'Samples']
             
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             if not file_exists:
@@ -169,7 +172,8 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
                                 'Prozent des Trainingssatzes': train_size,
                                 'Train/Validation/Test': split,
                                 'AUC' : auc,
-                                'ACC' : acc})
+                                'ACC' : acc,
+                                'Samples': train_len})
 
         """ if output_root is not None:
             output_dir = os.path.join(output_root, flag)

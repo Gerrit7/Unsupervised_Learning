@@ -100,7 +100,7 @@ def main(flag, dataset_root, model_root, trainSize, download):
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EfficientNet.from_name('efficientnet-b0')
-    #model._conv_stem = Conv2dStaticSamePadding(3, 32, kernel_size=(3, 3), stride=(2, 2), bias=False, image_size =32)
+    model._conv_stem = Conv2dStaticSamePadding(n_channels, 32, kernel_size=(3, 3), stride=(2, 2), bias=False, image_size =32)
     model._fc= nn.Linear(1280, n_classes)
 
     print('==> Testing model...')
@@ -118,6 +118,7 @@ def main(flag, dataset_root, model_root, trainSize, download):
             device,
             flag,
             task,
+            len(train_dataset_scaled),
             output_root=model_root)
     
     test(model, 
@@ -126,6 +127,7 @@ def main(flag, dataset_root, model_root, trainSize, download):
         device, 
         flag, 
         task, 
+        len(train_dataset_scaled),
         output_root=model_root)
 
     test(model,
@@ -134,9 +136,10 @@ def main(flag, dataset_root, model_root, trainSize, download):
             device,
             flag,
             task,
+            len(train_dataset_scaled),
             output_root=model_root)
 
-def test(model, split, data_loader, device, flag, task, output_root=None):
+def test(model, split, data_loader, device, flag, task, train_len, output_root=None):
     ''' testing function
     :param model: the model to test
     :param split: the data to test, 'train/val/test'
@@ -177,7 +180,7 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
         file_exists = os.path.isfile('../../../TrainedNets/EfficientNet/results.csv')
         with open('../../../TrainedNets/EfficientNet/results.csv', 'a+', newline='') as csvfile:
             fieldnames = ['Datensatz', 'Prozent des Trainingssatzes', 'Train/Validation/Test',
-                            'AUC', 'ACC']
+                            'AUC', 'ACC', 'Samples']
             
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             if not file_exists:
@@ -186,7 +189,8 @@ def test(model, split, data_loader, device, flag, task, output_root=None):
                                 'Prozent des Trainingssatzes': train_size,
                                 'Train/Validation/Test': split,
                                 'AUC' : auc,
-                                'ACC' : acc})
+                                'ACC' : acc,
+                                'Samples': train_len})
 
         """ if output_root is not None:
             output_dir = os.path.join(output_root, flag)
